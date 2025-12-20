@@ -1,6 +1,6 @@
 ﻿services:
   watchdog:
-    image: pangolin-watchdog:latest
+    image: kacper1263/pangolin-watchdog:v1.0
     container_name: pangolin-watchdog
     restart: unless-stopped
     ports:

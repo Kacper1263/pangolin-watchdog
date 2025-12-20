@@ -1,4 +1,6 @@
 ﻿# docker build -t pangolin-watchdog:latest .
+# (docker tag pangolin-watchdog:latest kacper1263/pangolin-watchdog:v1.0)
+# (docker push kacper1263/pangolin-watchdog:v1.0)
 # docker save -o watchdog_image.tar pangolin-watchdog:latest
 #
 # docker load -i watchdog_image.tar
