@@ -2,6 +2,10 @@
 
 A monitoring and security application that automatically protects your web resources by analyzing access logs from Pangolin API and automatically banning suspicious IPs based on configurable rules.
 
+<img width="1916" height="947" alt="obraz" src="https://github.com/user-attachments/assets/34330820-549d-462a-99eb-da71d43530f7" />
+<img width="1914" height="938" alt="obraz" src="https://github.com/user-attachments/assets/3f3896de-fc52-4ffc-9ed2-a46e7a692463" />
+
+
 ## Features
 
 - **Automated Log Monitoring**: Continuously polls Pangolin API for new access logs
