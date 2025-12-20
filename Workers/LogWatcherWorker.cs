@@ -76,19 +76,17 @@ public class LogWatcherWorker : BackgroundService
 
     private async Task ProcessLogs(AppDbContext db, PangolinConnector pangolin, AppConfig config, CancellationToken token)
     {
-        // take logs with 2-minute buffer to avoid missing any
         var timeEnd = DateTime.UtcNow;
         var timeStart = timeEnd.AddMinutes(-2);
 
         if (firstRun)
         {
             firstRun = false;
-            timeStart = timeEnd.AddHours(24); // on the first run, fetch last 24 hours to catch up
+            timeStart = timeEnd.AddHours(-24);
         }
 
         var logs = await pangolin.FetchLogsAsync(config, timeStart, timeEnd);
 
-        // filter only new logs
         var newLogs = logs
             .Where(l => l.Id > config.LastProcessedLogId)
             .OrderBy(l => l.Id) 
@@ -98,7 +96,7 @@ public class LogWatcherWorker : BackgroundService
 
         _logger.LogInformation("Fetched {Count} new logs. Analyzing...", newLogs.Count);
 
-        var rules = await db.Rules.Where(r => r.IsActive).ToListAsync(token);
+        var rules = await db.Rules.Include(r => r.TargetResource).Where(r => r.IsActive).ToListAsync(token);
         
         var regexCache = new Dictionary<long, Regex>();
 
@@ -108,7 +106,7 @@ public class LogWatcherWorker : BackgroundService
         {
             foreach (var rule in rules)
             {
-                var isResourceMatch = IsResourceMatch(rule, log);
+                var isResourceMatch = await IsResourceMatch(db, rule, log, token);
                 if (!isResourceMatch) continue;
 
                 var isPatternMatch = CheckPattern(rule, log.Path, regexCache);
@@ -127,22 +125,23 @@ public class LogWatcherWorker : BackgroundService
         await db.SaveChangesAsync(token);
     }
 
-    private bool IsResourceMatch(WatchdogRule rule, PangolinLogEntry log)
+    private async Task<bool> IsResourceMatch(AppDbContext db, WatchdogRule rule, PangolinLogEntry log, CancellationToken token)
     {
         if (rule.IsGlobal)
         {
-            if (string.IsNullOrEmpty(rule.ExcludedResourceNames)) return true;
+            if (string.IsNullOrEmpty(rule.ExcludedResourceIds)) return true;
             
-            var excluded = rule.ExcludedResourceNames.Split(',', StringSplitOptions.TrimEntries);
+            var excluded = rule.ExcludedResourceIds.Split(',', StringSplitOptions.TrimEntries);
             return !excluded.Contains(log.ResourceId.ToString()) && !excluded.Contains(log.ResourceName) && !excluded.Contains(log.Host);
         }
         else
         {
-            if (string.IsNullOrEmpty(rule.TargetResourceName)) return false;
+            if (rule.TargetResourceId == null) return false;
             
-            return rule.TargetResourceName == log.ResourceId.ToString() || 
-                   rule.TargetResourceName == log.ResourceName || 
-                   rule.TargetResourceName == log.Host;
+            var targetResource = await db.Resources.FirstOrDefaultAsync(r => r.Id == rule.TargetResourceId, token);
+            if (targetResource == null) return false;
+            
+            return targetResource.PangolinResourceId == log.ResourceId;
         }
     }
 
@@ -167,11 +166,17 @@ public class LogWatcherWorker : BackgroundService
 
     private async Task BanUser(AppDbContext db, PangolinConnector pangolin, AppConfig config, PangolinLogEntry log, WatchdogRule rule, CancellationToken token)
     {
-        // Check existing ban in LOCAL DB
+        var resource = await db.Resources.FirstOrDefaultAsync(r => r.PangolinResourceId == log.ResourceId, token);
+        if (resource == null)
+        {
+            _logger.LogWarning("Resource {ResId} not found in local DB, skipping ban for IP {Ip}", log.ResourceId, log.Ip);
+            return;
+        }
+
         var alreadyBanned = await db.BannedIps.AnyAsync(
             b => b.IpAddress == log.Ip && 
                  b.ExpiresAt > DateTime.Now && 
-                 b.ResourceId == log.ResourceId, 
+                 b.ResourceId == resource.Id, 
             token);
             
         if (alreadyBanned) return;
@@ -181,16 +186,13 @@ public class LogWatcherWorker : BackgroundService
         var ban = new BannedIp
         {
             IpAddress = log.Ip,
-            ResourceId = log.ResourceId,
-            ResourceName = log.ResourceName,
+            ResourceId = resource.Id,
             Reason = $"Rule: {rule.Name} (Path: {log.Path})",
             ExpiresAt = DateTime.Now.AddMinutes(duration)
         };
 
-        // Send Ban to Pangolin API (this will calculate priority and PUT ip in rules)
         await pangolin.BanIpAsync(config, log.Ip, log.ResourceId, duration, ban.Reason);
         
-        // Save to Local DB only if API call succeeded
         db.BannedIps.Add(ban);
         await db.SaveChangesAsync(token);
         

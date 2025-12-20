@@ -2,10 +2,12 @@
 @using Microsoft.AspNetCore.Authorization
 @using PangolinWatchdog.Data
 @using Microsoft.EntityFrameworkCore
+@using PangolinWatchdog.Services.Pangolin
 @attribute [Authorize]
 @inject AppDbContext Db
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject PangolinConnector PangolinConnector
 @rendermode InteractiveServer
 
 <PageTitle>Configuration</PageTitle>
@@ -36,7 +38,10 @@
                     </MudCardContent>
                 </MudCard>
             </MudItem>
-            <MudItem xs="12" Class="d-flex justify-end">
+            <MudItem xs="12" Class="d-flex justify-end gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="RefreshResources" StartIcon="@Icons.Material.Filled.Refresh">
+                    Refresh Resources list
+                </MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveConfig" StartIcon="@Icons.Material.Filled.Save">
                     Save Settings
                 </MudButton>
@@ -82,14 +87,14 @@
                     @if (rule.IsGlobal)
                     {
                         <MudText Color="Color.Info">Global</MudText>
-                        @if(!string.IsNullOrEmpty(rule.ExcludedResourceNames))
+                        @if(!string.IsNullOrEmpty(rule.ExcludedResourceIds))
                         {
-                            <MudText Typo="Typo.caption">Excl: @rule.ExcludedResourceNames</MudText>
+                            <MudText Typo="Typo.caption">Excl: @rule.ExcludedResourceIds</MudText>
                         }
                     }
                     else
                     {
-                         <MudText>Res: <b>@rule.TargetResourceName</b></MudText>
+                         <MudText><b>@(rule.TargetResource?.Name ?? "N/A")</b></MudText>
                     }
                 </MudTd>
                 <MudTd>
@@ -122,7 +127,7 @@
         _config = existingConfig;
 
         // Load Rules
-        _rules = Db.Rules.ToList();
+        _rules = Db.Rules.Include(r => r.TargetResource).ToList();
     }
 
     private void SaveConfig()
@@ -131,11 +136,54 @@
         Snackbar.Add("Settings saved successfully!", Severity.Success);
     }
 
+    private async Task RefreshResources()
+    {
+        try
+        {
+            var resources = await PangolinConnector.GetResourcesAsync(_config);
+            
+            var existingPangolinIds = Db.Resources.Select(r => r.PangolinResourceId).ToList();
+            var fetchedPangolinIds = resources.Select(r => r.ResourceId).ToList();
+            
+            var toDelete = existingPangolinIds.Except(fetchedPangolinIds).ToList();
+            if (toDelete.Any())
+            {
+                var resourcesToDelete = Db.Resources.Where(r => toDelete.Contains(r.PangolinResourceId)).ToList();
+                Db.Resources.RemoveRange(resourcesToDelete);
+            }
+            
+            foreach (var resource in resources)
+            {
+                var existing = Db.Resources.FirstOrDefault(r => r.PangolinResourceId == resource.ResourceId);
+                if (existing != null)
+                {
+                    existing.Name = resource.Name;
+                    existing.FullDomain = resource.FullDomain;
+                }
+                else
+                {
+                    Db.Resources.Add(new Resource
+                    {
+                        PangolinResourceId = resource.ResourceId,
+                        Name = resource.Name,
+                        FullDomain = resource.FullDomain
+                    });
+                }
+            }
+            
+            Db.SaveChanges();
+            Snackbar.Add($"Resources refreshed! Synced {resources.Count} resources.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to refresh resources: {ex.Message}", Severity.Error);
+        }
+    }
+
     private async Task OpenRuleDialog(WatchdogRule? rule)
     {
         var isNew = rule == null;
         
-        // Clone object for editing to avoid EF tracking issues during cancel
         var ruleModel = isNew ? new WatchdogRule() : new WatchdogRule 
         { 
             Id = rule!.Id, 
@@ -143,8 +191,8 @@
             Pattern = rule.Pattern, 
             UseRegex = rule.UseRegex,
             IsGlobal = rule.IsGlobal, 
-            TargetResourceName = rule.TargetResourceName, 
-            ExcludedResourceNames = rule.ExcludedResourceNames, 
+            TargetResourceId = rule.TargetResourceId, 
+            ExcludedResourceIds = rule.ExcludedResourceIds, 
             BanDurationMinutes = rule.BanDurationMinutes,
             IsActive = rule.IsActive
         };
@@ -163,20 +211,19 @@
             }
             else
             {
-                // Find existing entity and update props
                 var entity = Db.Rules.First(r => r.Id == savedRule.Id);
                 entity.Name = savedRule.Name;
                 entity.Pattern = savedRule.Pattern;
                 entity.UseRegex = savedRule.UseRegex;
                 entity.IsGlobal = savedRule.IsGlobal;
-                entity.TargetResourceName = savedRule.TargetResourceName;
-                entity.ExcludedResourceNames = savedRule.ExcludedResourceNames;
+                entity.TargetResourceId = savedRule.TargetResourceId;
+                entity.ExcludedResourceIds = savedRule.ExcludedResourceIds;
                 entity.BanDurationMinutes = savedRule.BanDurationMinutes;
                 entity.IsActive = savedRule.IsActive;
             }
 
             Db.SaveChanges();
-            _rules = Db.Rules.ToList(); // Refresh list
+            _rules = Db.Rules.Include(r => r.TargetResource).ToList();
             Snackbar.Add("Rule saved!", Severity.Success);
         }
     }
@@ -192,7 +239,7 @@
         {
             Db.Rules.Remove(rule);
             Db.SaveChanges();
-            _rules = Db.Rules.ToList();
+            _rules = Db.Rules.Include(r => r.TargetResource).ToList();
             Snackbar.Add("Rule deleted.", Severity.Info);
         }
     }

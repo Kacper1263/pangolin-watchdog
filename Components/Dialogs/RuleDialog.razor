@@ -1,6 +1,7 @@
 ﻿@using PangolinWatchdog.Data
 @using MudBlazor
 @using System.Text.RegularExpressions
+@inject AppDbContext Db
 
 <MudDialog>
     <DialogContent>
@@ -59,14 +60,17 @@
         @if (Rule.IsGlobal)
         {
             <MudTextField T="string" Label="Excluded Resources (Optional)" 
-                          @bind-Value="Rule.ExcludedResourceNames"
-                          HelperText="Comma separated IDs to ignore" />
+                          @bind-Value="Rule.ExcludedResourceIds"
+                          HelperText="Comma separated Resource IDs to ignore" />
         }
         else
         {
-            <MudTextField T="string" Label="Target Resource ID" 
-                          @bind-Value="Rule.TargetResourceName"
-                          HelperText="The specific resource ID from Pangolin" Required="true"/>
+            <MudSelect T="long?" Label="Target Resource" @bind-Value="Rule.TargetResourceId" Required="true">
+                @foreach (var resource in _resources)
+                {
+                    <MudSelectItem T="long?" Value="@resource.Id">@resource.Name</MudSelectItem>
+                }
+            </MudSelect>
         }
 
         <MudSwitch T="bool" Label="Active" Color="Color.Success" @bind-Value="Rule.IsActive" />
@@ -84,13 +88,17 @@
 
     [Parameter] public WatchdogRule Rule { get; set; } = new();
 
-    // Field for the tester input
     private string _testString = "";
+    private List<Resource> _resources = new();
+
+    protected override void OnInitialized()
+    {
+        _resources = Db.Resources.OrderBy(r => r.Name).ToList();
+    }
 
     void Submit() => MudDialog.Close(DialogResult.Ok(Rule));
     void Cancel() => MudDialog.Cancel();
 
-    // Logic for the tester chip
     private (string Icon, Color Color, string Text) GetTesterResult()
     {
         if (string.IsNullOrWhiteSpace(_testString))

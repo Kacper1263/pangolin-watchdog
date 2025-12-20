@@ -17,7 +17,7 @@ obj/
 *.db
 *.db-shm
 *.db-wal
-data/
+data/*.db
 
 ## --- OS / System ---
 .DS_Store

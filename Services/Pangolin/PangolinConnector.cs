@@ -150,6 +150,52 @@ public class PangolinConnector
         return currentPriorityMax == 0 ? 10 : currentPriorityMax + 1;
     }
 
+    public async Task<List<PangolinResourceEntry>> GetResourcesAsync(AppConfig config)
+    {
+        var allResources = new List<PangolinResourceEntry>();
+        var limit = 1000;
+        var offset = 0;
+        var morePagesAvailable = true;
+
+        try
+        {
+            while (morePagesAvailable)
+            {
+                var url = $"{config.PangolinApiUrl.TrimEnd('/')}/org/{config.PangolinOrgId}/resources?limit={limit}&offset={offset}";
+                
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                AddAuthHeader(request, config);
+
+                var response = await _http.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var result = await response.Content.ReadFromJsonAsync<PangolinResourcesResponse>();
+                var batch = result?.Data?.Resources ?? new List<PangolinResourceEntry>();
+
+                if (batch.Count > 0)
+                {
+                    allResources.AddRange(batch);
+                }
+
+                if (batch.Count < limit)
+                {
+                    morePagesAvailable = false;
+                }
+                else
+                {
+                    offset += limit;
+                }
+            }
+
+            return allResources;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch resources from Pangolin API (Offset: {Offset})", offset);
+            throw;
+        }
+    }
+
     private void AddAuthHeader(HttpRequestMessage request, AppConfig config)
     {
         if (!string.IsNullOrEmpty(config.PangolinApiToken))
