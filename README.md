@@ -2,7 +2,7 @@
 
 A monitoring and security application that automatically protects your web resources by analyzing access logs from Pangolin API and automatically banning suspicious IPs based on configurable rules.
 
-## 🚀 Features
+## Features
 
 - **Automated Log Monitoring**: Continuously polls Pangolin API for new access logs
 - **Rule-Based IP Blocking**: Define custom rules to automatically ban IPs based on access patterns
@@ -16,7 +16,7 @@ A monitoring and security application that automatically protects your web resou
 - **Docker Support**: Easy deployment with Docker and Docker Compose
 - **SQLite Database**: Lightweight data persistence for configuration and ban history
 
-## 📋 Prerequisites
+## Prerequisites
 
 ### For Docker Deployment (Recommended)
 - Docker
@@ -26,7 +26,7 @@ A monitoring and security application that automatically protects your web resou
 - .NET 9.0 SDK
 - SQLite (included with .NET)
 
-## 🐳 Quick Start with Docker
+## Quick Start with Docker
 
 ### 1. Build the Docker Image
 
@@ -65,7 +65,7 @@ Open your browser and navigate to: `http://localhost:8855`
 
 Default login password: `watchdogadmin` (configured via `ADMIN_PASSWORD` environment variable)
 
-## 💻 Local Development
+## Local Development
 
 ### 1. Clone the Repository
 
@@ -92,15 +92,15 @@ The application will start and display the listening address (typically `http://
 
 Navigate to the displayed URL in your browser and log in with the admin password (default: `watchdogadmin`, set via `ADMIN_PASSWORD` environment variable).
 
-## ⚙️ Configuration
+## Configuration
 
 ### Initial Setup
 
 1. **Log in** to the web dashboard
 2. **Navigate to Configuration** page
 3. **Configure Pangolin API Settings**:
-   - **API URL**: Your Pangolin API endpoint (e.g., `https://api.pangolin.example.com`)
-   - **Organization ID**: Your Pangolin organization ID
+   - **API URL**: Your Pangolin API endpoint (e.g., `https://api.pangolin.example.com/v1`)
+   - **Organization ID**: Your Pangolin organization ID (name - visible in top left corner in your Pangolin dashboard)
    - **API Token**: Your Pangolin API authentication token
    - **Log Polling Interval**: How often to check for new logs (in seconds)
    - **Default Ban Duration**: Default duration for IP bans (in minutes)
@@ -122,28 +122,7 @@ Rules define which access patterns should trigger automatic IP bans.
 - Block SQL injection attempts: Regex `.*(\bunion\b|\bselect\b).*`
 - Block specific file types: Regex `.*\.(php|asp|jsp)$`
 
-## 📁 Project Structure
-
-```
-PangolinWatchdog/
-├── Components/          # Blazor components
-│   ├── Pages/          # Page components (Dashboard, Configuration, Login)
-│   ├── Dialogs/        # Dialog components
-│   └── Layout/         # Layout components
-├── Services/           # Business logic services
-│   ├── PangolinConnector.cs    # Pangolin API integration
-│   └── PangolinModels.cs       # API data models
-├── Workers/            # Background services
-│   └── LogWatcherWorker.cs     # Log monitoring worker
-├── Helpers/            # Utility classes
-├── Migrations/         # Entity Framework migrations
-├── wwwroot/           # Static web assets
-├── Program.cs         # Application entry point
-├── Dockerfile         # Docker image configuration
-└── compose.yaml       # Docker Compose configuration
-```
-
-## 🛠️ Technology Stack
+## Technology Stack
 
 - **Framework**: .NET 9.0
 - **UI**: Blazor Server with MudBlazor components
@@ -152,7 +131,7 @@ PangolinWatchdog/
 - **Background Processing**: Hosted Services (IHostedService)
 - **Containerization**: Docker
 
-## 🔒 Security
+## Security
 
 - **Authentication Required**: All pages except login require authentication
 - **Secure API Integration**: Bearer token authentication with Pangolin API
@@ -175,7 +154,7 @@ export ADMIN_PASSWORD=your_secure_password
 dotnet run
 ```
 
-## 📊 How It Works
+## How It Works
 
 1. **Log Monitoring**: The background worker continuously polls the Pangolin API for new access logs
 2. **Rule Evaluation**: Each log entry is evaluated against active watchdog rules
@@ -183,11 +162,11 @@ dotnet run
 4. **Ban Tracking**: All bans are recorded in the local database with expiration times
 5. **Dashboard Updates**: The web dashboard displays real-time statistics and ban history
 
-## 🔄 Maintenance
+## Maintenance
 
 ### Database Location
 
-- **Docker**: `./data/watchdog.db` (mounted volume)
+- **Docker**: `./data/watchdog.db`
 - **Local**: `<app_directory>/data/watchdog.db`
 
 ### Logs
@@ -198,15 +177,3 @@ Application logs are written to the console with the following levels:
 - **ERROR**: API failures and critical errors
 
 Configure logging in `appsettings.json`.
-
-## 📝 License
-
-This project is open source. Please check the repository for license information.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit issues and pull requests.
-
-## 📞 Support
-
-For issues, questions, or contributions, please visit the [GitHub repository](https://github.com/Kacper1263/pangolin-watchdog).
