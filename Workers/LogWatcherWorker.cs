@@ -96,7 +96,11 @@ public class LogWatcherWorker : BackgroundService
 
         _logger.LogInformation("Fetched {Count} new logs. Analyzing...", newLogs.Count);
 
-        var rules = await db.Rules.Include(r => r.TargetResource).Where(r => r.IsActive).ToListAsync(token);
+        var rules = await db.Rules
+            .Include(r => r.TargetResource)
+            .Include(r => r.ExcludedResources)
+            .Where(r => r.IsActive)
+            .ToListAsync(token);
         
         var regexCache = new Dictionary<long, Regex>();
 
@@ -129,10 +133,12 @@ public class LogWatcherWorker : BackgroundService
     {
         if (rule.IsGlobal)
         {
-            if (string.IsNullOrEmpty(rule.ExcludedResourceIds)) return true;
+            if (!rule.ExcludedResources.Any()) return true;
             
-            var excluded = rule.ExcludedResourceIds.Split(',', StringSplitOptions.TrimEntries);
-            return !excluded.Contains(log.ResourceId.ToString()) && !excluded.Contains(log.ResourceName) && !excluded.Contains(log.Host);
+            var excludedResourceIds = rule.ExcludedResources.Select(e => e.ResourceId).ToList();
+            var logResource = await db.Resources.FirstOrDefaultAsync(r => r.PangolinResourceId == log.ResourceId, token);
+            
+            return logResource == null || !excludedResourceIds.Contains(logResource.Id);
         }
         else
         {

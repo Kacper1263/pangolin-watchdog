@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<WatchdogRule> Rules { get; set; } 
     public DbSet<AppConfig> Configurations { get; set; }
     public DbSet<Resource> Resources { get; set; }
+    public DbSet<RuleResourceExclusion> RuleResourceExclusions { get; set; }
 }
 
 public class BannedIp
@@ -76,7 +77,7 @@ public class WatchdogRule
     [DeleteBehavior(DeleteBehavior.SetNull)]
     public Resource? TargetResource { get; set; }
 
-    public string? ExcludedResourceIds { get; set; }
+    public List<RuleResourceExclusion> ExcludedResources { get; set; } = new();
 
     public int? BanDurationMinutes { get; set; } = 60;
     
@@ -98,5 +99,25 @@ public class Resource
     [Required]
     [MaxLength(500)]
     public string FullDomain { get; set; } = string.Empty;
+}
+
+public class RuleResourceExclusion
+{
+    [Key]
+    public long Id { get; set; }
+    
+    [Required]
+    public long RuleId { get; set; }
+    
+    [ForeignKey(nameof(RuleId))]
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public WatchdogRule Rule { get; set; } = null!;
+    
+    [Required]
+    public long ResourceId { get; set; }
+    
+    [ForeignKey(nameof(ResourceId))]
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public Resource Resource { get; set; } = null!;
 }
 

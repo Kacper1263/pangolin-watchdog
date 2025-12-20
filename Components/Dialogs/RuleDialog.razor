@@ -59,9 +59,15 @@
 
         @if (Rule.IsGlobal)
         {
-            <MudTextField T="string" Label="Excluded Resources (Optional)" 
-                          @bind-Value="Rule.ExcludedResourceIds"
-                          HelperText="Comma separated Resource IDs to ignore" />
+            <MudSelect T="long" Label="Excluded Resources (Optional)" 
+                       @bind-SelectedValues="_selectedExclusions" 
+                       MultiSelection="true"
+                       HelperText="Select resources to exclude from this global rule">
+                @foreach (var resource in _resources)
+                {
+                    <MudSelectItem T="long" Value="@resource.Id">@resource.Name</MudSelectItem>
+                }
+            </MudSelect>
         }
         else
         {
@@ -90,13 +96,34 @@
 
     private string _testString = "";
     private List<Resource> _resources = new();
+    private IEnumerable<long> _selectedExclusions = new HashSet<long>();
 
     protected override void OnInitialized()
     {
         _resources = Db.Resources.OrderBy(r => r.Name).ToList();
+        
+        if (Rule.Id > 0)
+        {
+            _selectedExclusions = Db.RuleResourceExclusions
+                .Where(e => e.RuleId == Rule.Id)
+                .Select(e => e.ResourceId)
+                .ToList();
+        }
     }
 
-    void Submit() => MudDialog.Close(DialogResult.Ok(Rule));
+    void Submit()
+    {
+        Rule.ExcludedResources = _selectedExclusions
+            .Select(resourceId => new RuleResourceExclusion 
+            { 
+                RuleId = Rule.Id, 
+                ResourceId = resourceId 
+            })
+            .ToList();
+        
+        MudDialog.Close(DialogResult.Ok(Rule));
+    }
+    
     void Cancel() => MudDialog.Cancel();
 
     private (string Icon, Color Color, string Text) GetTesterResult()

@@ -87,9 +87,10 @@
                     @if (rule.IsGlobal)
                     {
                         <MudText Color="Color.Info">Global</MudText>
-                        @if(!string.IsNullOrEmpty(rule.ExcludedResourceIds))
+                        @if(rule.ExcludedResources.Any())
                         {
-                            <MudText Typo="Typo.caption">Excl: @rule.ExcludedResourceIds</MudText>
+                            var excludedNames = string.Join(", ", rule.ExcludedResources.Select(e => e.Resource.Name));
+                            <MudText Typo="Typo.caption">Excl: @excludedNames</MudText>
                         }
                     }
                     else
@@ -102,6 +103,7 @@
                 </MudTd>
                 <MudTd>
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="@(() => OpenRuleDialog(rule))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Info" OnClick="@(() => CloneRule(rule))" />
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteRule(rule))" />
                 </MudTd>
             </RowTemplate>
@@ -127,7 +129,11 @@
         _config = existingConfig;
 
         // Load Rules
-        _rules = Db.Rules.Include(r => r.TargetResource).ToList();
+        _rules = Db.Rules
+            .Include(r => r.TargetResource)
+            .Include(r => r.ExcludedResources)
+            .ThenInclude(e => e.Resource)
+            .ToList();
     }
 
     private void SaveConfig()
@@ -191,8 +197,7 @@
             Pattern = rule.Pattern, 
             UseRegex = rule.UseRegex,
             IsGlobal = rule.IsGlobal, 
-            TargetResourceId = rule.TargetResourceId, 
-            ExcludedResourceIds = rule.ExcludedResourceIds, 
+            TargetResourceId = rule.TargetResourceId,
             BanDurationMinutes = rule.BanDurationMinutes,
             IsActive = rule.IsActive
         };
@@ -208,24 +213,89 @@
             if (isNew)
             {
                 Db.Rules.Add(savedRule);
+                Db.SaveChanges();
+                
+                if (savedRule.ExcludedResources.Any())
+                {
+                    foreach (var exclusion in savedRule.ExcludedResources)
+                    {
+                        exclusion.RuleId = savedRule.Id;
+                        Db.RuleResourceExclusions.Add(exclusion);
+                    }
+                    Db.SaveChanges();
+                }
             }
             else
             {
-                var entity = Db.Rules.First(r => r.Id == savedRule.Id);
+                var entity = Db.Rules.Include(r => r.ExcludedResources).First(r => r.Id == savedRule.Id);
                 entity.Name = savedRule.Name;
                 entity.Pattern = savedRule.Pattern;
                 entity.UseRegex = savedRule.UseRegex;
                 entity.IsGlobal = savedRule.IsGlobal;
                 entity.TargetResourceId = savedRule.TargetResourceId;
-                entity.ExcludedResourceIds = savedRule.ExcludedResourceIds;
                 entity.BanDurationMinutes = savedRule.BanDurationMinutes;
                 entity.IsActive = savedRule.IsActive;
+                
+                Db.RuleResourceExclusions.RemoveRange(entity.ExcludedResources);
+                
+                if (savedRule.ExcludedResources.Any())
+                {
+                    foreach (var exclusion in savedRule.ExcludedResources)
+                    {
+                        exclusion.RuleId = entity.Id;
+                        Db.RuleResourceExclusions.Add(exclusion);
+                    }
+                }
+                
+                Db.SaveChanges();
             }
 
-            Db.SaveChanges();
-            _rules = Db.Rules.Include(r => r.TargetResource).ToList();
+            _rules = Db.Rules
+                .Include(r => r.TargetResource)
+                .Include(r => r.ExcludedResources)
+                .ThenInclude(e => e.Resource)
+                .ToList();
             Snackbar.Add("Rule saved!", Severity.Success);
         }
+    }
+
+    private Task CloneRule(WatchdogRule rule)
+    {
+        var clonedRule = new WatchdogRule
+        {
+            Name = $"{rule.Name} (Copy)",
+            Pattern = rule.Pattern,
+            UseRegex = rule.UseRegex,
+            IsGlobal = rule.IsGlobal,
+            TargetResourceId = rule.TargetResourceId,
+            BanDurationMinutes = rule.BanDurationMinutes,
+            IsActive = rule.IsActive
+        };
+
+        Db.Rules.Add(clonedRule);
+        Db.SaveChanges();
+
+        if (rule.ExcludedResources.Any())
+        {
+            foreach (var exclusion in rule.ExcludedResources)
+            {
+                Db.RuleResourceExclusions.Add(new RuleResourceExclusion
+                {
+                    RuleId = clonedRule.Id,
+                    ResourceId = exclusion.ResourceId
+                });
+            }
+            Db.SaveChanges();
+        }
+
+        _rules = Db.Rules
+            .Include(r => r.TargetResource)
+            .Include(r => r.ExcludedResources)
+            .ThenInclude(e => e.Resource)
+            .ToList();
+        Snackbar.Add($"Rule '{rule.Name}' cloned successfully!", Severity.Success);
+        
+        return Task.CompletedTask;
     }
 
     private async Task DeleteRule(WatchdogRule rule)
@@ -239,7 +309,11 @@
         {
             Db.Rules.Remove(rule);
             Db.SaveChanges();
-            _rules = Db.Rules.Include(r => r.TargetResource).ToList();
+            _rules = Db.Rules
+                .Include(r => r.TargetResource)
+                .Include(r => r.ExcludedResources)
+                .ThenInclude(e => e.Resource)
+                .ToList();
             Snackbar.Add("Rule deleted.", Severity.Info);
         }
     }
