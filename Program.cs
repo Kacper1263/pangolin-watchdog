@@ -18,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient<PangolinConnector>();
 builder.Services.AddHostedService<LogWatcherWorker>();
+builder.Services.AddHostedService<BanCleanupWorker>();
 
 // SQLite
 var dbPath = Path.Combine(AppContext.BaseDirectory, "data", "watchdog.db");

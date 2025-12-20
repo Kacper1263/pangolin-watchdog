@@ -30,4 +30,10 @@ public class PangolinExistingRule
 
     [JsonPropertyName("action")]
     public string Action { get; set; } = string.Empty;
+    
+    [JsonPropertyName("match")]
+    public string Match { get; set; } = string.Empty;
+    
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = string.Empty;
 }

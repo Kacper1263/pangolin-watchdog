@@ -102,52 +102,91 @@ public class PangolinConnector
         }
     }
 
-    private async Task<int> GetNextPriorityAsync(AppConfig config, long resourceId)
+    public async Task<List<PangolinExistingRule>> GetRulesAsync(AppConfig config, long resourceId)
     {
-        var currentPriorityMax = 0;
+        var allRules = new List<PangolinExistingRule>();
         var limit = 1000;
         var offset = 0;
         var morePagesAvailable = true;
 
-        while (morePagesAvailable)
+        try
         {
-            var url = $"{config.PangolinApiUrl.TrimEnd('/')}/resource/{resourceId}/rules?limit={limit}&offset={offset}";
-            
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            AddAuthHeader(request, config);
-
-            var response = await _http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            var result = await response.Content.ReadFromJsonAsync<PangolinRulesResponse>();
-            var rules = result?.Data?.Rules ?? new List<PangolinExistingRule>();
-
-            if (rules.Any())
+            while (morePagesAvailable)
             {
-                // Check max in current batch
-                var batchMax = rules.Max(r => r.Priority);
-                if (batchMax > currentPriorityMax)
+                var url = $"{config.PangolinApiUrl.TrimEnd('/')}/resource/{resourceId}/rules?limit={limit}&offset={offset}";
+                
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                AddAuthHeader(request, config);
+
+                var response = await _http.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var result = await response.Content.ReadFromJsonAsync<PangolinRulesResponse>();
+                var batch = result?.Data?.Rules ?? new List<PangolinExistingRule>();
+
+                if (batch.Count > 0)
                 {
-                    currentPriorityMax = batchMax;
+                    allRules.AddRange(batch);
+                }
+
+                if (batch.Count < limit)
+                {
+                    morePagesAvailable = false;
+                }
+                else
+                {
+                    offset += limit;
                 }
             }
 
-            // Logic to decide if we fetch next page
-            if (rules.Count < limit)
+            return allRules;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch rules from Pangolin API (Offset: {Offset})", offset);
+            return allRules;
+        }
+    }
+
+    public async Task<bool> DeleteRuleAsync(AppConfig config, long resourceId, long ruleId)
+    {
+        try
+        {
+            var url = $"{config.PangolinApiUrl.TrimEnd('/')}/resource/{resourceId}/rule/{ruleId}";
+            
+            var request = new HttpRequestMessage(HttpMethod.Delete, url);
+            AddAuthHeader(request, config);
+
+            var response = await _http.SendAsync(request);
+            
+            if (!response.IsSuccessStatusCode)
             {
-                // We received fewer items than the limit, so this is the last page
-                morePagesAvailable = false;
+                var errorBody = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to delete rule {RuleId}. Status: {Status}. Response: {Body}", ruleId, response.StatusCode, errorBody);
+                return false;
             }
-            else
-            {
-                // Full page received, likely there is more data
-                offset += limit;
-            }
+
+            _logger.LogInformation("Successfully deleted rule {RuleId} from Resource {ResId}", ruleId, resourceId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during DeleteRuleAsync execution");
+            return false;
+        }
+    }
+
+    private async Task<int> GetNextPriorityAsync(AppConfig config, long resourceId)
+    {
+        var rules = await GetRulesAsync(config, resourceId);
+        
+        if (!rules.Any())
+        {
+            return 10;
         }
 
-        // If no rules were ever found (currentPriorityMax still 0), start at 10.
-        // Otherwise, increment the highest found priority.
-        return currentPriorityMax == 0 ? 10 : currentPriorityMax + 1;
+        var maxPriority = rules.Max(r => r.Priority);
+        return maxPriority + 1;
     }
 
     public async Task<List<PangolinResourceEntry>> GetResourcesAsync(AppConfig config)
