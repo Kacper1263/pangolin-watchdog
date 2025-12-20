@@ -26,38 +26,19 @@ A monitoring and security application that automatically protects your web resou
 - Docker
 - Docker Compose
 
-### For Local Development
+### For Building from Source
 - .NET 9.0 SDK
 - SQLite (included with .NET)
 
 ## Quick Start with Docker
 
-### 1. Build the Docker Image
+The application is available as a pre-built Docker image on Docker Hub: `kacper1263/pangolin-watchdog:v1.0` (replace with the current version)
 
-```bash
-docker build -t pangolin-watchdog:latest .
-```
+### 1. Create docker-compose.yml
 
-### 2. Configure and Run
+Download current `docker-compose.yml` file and change env variables
 
-Edit the `compose.yaml` file to set your configuration:
-
-```yaml
-services:
-  watchdog:
-    image: pangolin-watchdog:latest
-    container_name: pangolin-watchdog
-    restart: unless-stopped
-    ports:
-      - "8855:8080" 
-    volumes:
-      - ./data:/app/data
-    environment:
-      - ADMIN_PASSWORD=watchdogadmin # Change this!
-      - TZ=Europe/Warsaw # Set your timezone
-```
-
-Then start the service:
+### 2. Start the Service
 
 ```bash
 docker compose up -d
@@ -67,9 +48,22 @@ docker compose up -d
 
 Open your browser and navigate to: `http://localhost:8855`
 
-Default login password: `watchdogadmin` (configured via `ADMIN_PASSWORD` environment variable)
+Default login password: `watchdogadmin` (change it via `ADMIN_PASSWORD` environment variable)
 
-## Local Development
+### Alternative: Run with Docker CLI
+
+```bash
+docker run -d \
+  --name pangolin-watchdog \
+  --restart unless-stopped \
+  -p 8855:8080 \
+  -v ./data:/app/data \
+  -e ADMIN_PASSWORD=watchdogadmin \
+  -e TZ=Europe/Warsaw \
+  kacper1263/pangolin-watchdog:v1.0
+```
+
+## Building from Source
 
 ### 1. Clone the Repository
 
@@ -78,23 +72,22 @@ git clone https://github.com/Kacper1263/pangolin-watchdog.git
 cd pangolin-watchdog
 ```
 
-### 2. Restore Dependencies
+### 2. Run Locally
 
 ```bash
 dotnet restore
-```
-
-### 3. Run the Application
-
-```bash
 dotnet run
 ```
 
 The application will start and display the listening address (typically `http://localhost:5000`).
 
-### 4. Access the Dashboard
+### 3. Build Custom Docker Image
 
-Navigate to the displayed URL in your browser and log in with the admin password (default: `watchdogadmin`, set via `ADMIN_PASSWORD` environment variable).
+```bash
+docker build -t pangolin-watchdog:custom .
+```
+
+Then update the `image` field in `docker-compose.yml` to use your custom image.
 
 ## Configuration
 
