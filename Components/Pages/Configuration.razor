@@ -50,7 +50,7 @@
     </MudTabPanel>
 
     <MudTabPanel Text="Blocking Rules" Icon="@Icons.Material.Filled.Security">
-        <MudTable Items="@_rules" Hover="true" Elevation="0">
+        <MudTable Items="@_rules" Hover="true" Elevation="0" Breakpoint="Breakpoint.None" Dense="true">
             <ToolBarContent>
                 <MudText Typo="Typo.h6">Defined Rules</MudText>
                 <MudSpacer />
@@ -59,20 +59,20 @@
                 </MudButton>
             </ToolBarContent>
             <HeaderContent>
-                <MudTh>Status</MudTh>
-                <MudTh>Name</MudTh>
-                <MudTh>Pattern</MudTh>
-                <MudTh>Scope</MudTh>
-                <MudTh>Ban Time</MudTh>
-                <MudTh>Actions</MudTh>
+                <MudTh Style="width: 1%;">Status</MudTh>
+                <MudTh Style="width: 15%;">Name</MudTh>
+                <MudTh Style="width: 30%;">Pattern</MudTh>
+                <MudTh Style="width: 12%;">Scope</MudTh>
+                <MudTh Style="width: 5%;">Ban Time</MudTh>
+                <MudTh Style="width: 13%;">Actions</MudTh>
             </HeaderContent>
             <RowTemplate Context="rule">
-                <MudTd>
+                <MudTd Style="vertical-align: top;">
                     @if(rule.IsActive) { <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/> }
                     else { <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/> }
                 </MudTd>
-                <MudTd>@rule.Name</MudTd>
-                <MudTd>
+                <MudTd Style="vertical-align: top;">@rule.Name</MudTd>
+                <MudTd Style="vertical-align: top;">
                     @if(rule.UseRegex)
                     {
                         <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">REGEX</MudChip>
@@ -83,14 +83,25 @@
                     }
                     <code>@rule.Pattern</code>
                 </MudTd>
-                <MudTd>
+                <MudTd Style="vertical-align: top;">
                     @if (rule.IsGlobal)
                     {
                         <MudText Color="Color.Info">Global</MudText>
                         @if(rule.ExcludedResources.Any())
                         {
-                            var excludedNames = string.Join(", ", rule.ExcludedResources.Select(e => e.Resource.Name));
-                            <MudText Typo="Typo.caption">Excl: @excludedNames</MudText>
+                            <MudTooltip>
+                                <ChildContent>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text">
+                                        Excl: @rule.ExcludedResources.Count
+                                    </MudChip>
+                                </ChildContent>
+                                <TooltipContent>
+                                    @foreach (var excl in rule.ExcludedResources)
+                                    {
+                                        <div>@excl.Resource.Name</div>
+                                    }
+                                </TooltipContent>
+                            </MudTooltip>
                         }
                     }
                     else
@@ -98,10 +109,10 @@
                          <MudText><b>@(rule.TargetResource?.Name ?? "N/A")</b></MudText>
                     }
                 </MudTd>
-                <MudTd>
+                <MudTd Style="vertical-align: top;">
                     @(rule.BanDurationMinutes.HasValue ? $"{rule.BanDurationMinutes} min" : "Default")
                 </MudTd>
-                <MudTd>
+                <MudTd Style="vertical-align: top;">
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="@(() => OpenRuleDialog(rule))" />
                     <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Info" OnClick="@(() => CloneRule(rule))" />
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteRule(rule))" />
