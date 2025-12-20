@@ -1,7 +1,7 @@
-﻿using System.Net.Http.Json;
-using PangolinWatchdog.Data;
+﻿using PangolinWatchdog.Data;
+using PangolinWatchdog.DTO.Pangolin;
 
-namespace PangolinWatchdog.Services;
+namespace PangolinWatchdog.Services.Pangolin;
 
 public class PangolinConnector
 {

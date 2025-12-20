@@ -10,6 +10,7 @@ using PangolinWatchdog.Components;
 using PangolinWatchdog.Data;
 using PangolinWatchdog.Helpers;
 using PangolinWatchdog.Services;
+using PangolinWatchdog.Services.Pangolin;
 using PangolinWatchdog.Workers;
 
 var builder = WebApplication.CreateBuilder(args);

@@ -2,6 +2,8 @@
 using PangolinWatchdog.Data;
 using PangolinWatchdog.Services;
 using System.Text.RegularExpressions;
+using PangolinWatchdog.DTO.Pangolin;
+using PangolinWatchdog.Services.Pangolin;
 
 namespace PangolinWatchdog.Workers;
 
