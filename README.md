@@ -32,7 +32,7 @@ A monitoring and security application that automatically protects your web resou
 
 ## Quick Start with Docker
 
-The application is available as a pre-built Docker image on Docker Hub: `kacper1263/pangolin-watchdog:v1.0` (replace with the current version)
+The application is available as a pre-built Docker image on Docker Hub: https://hub.docker.com/r/kacper1263/pangolin-watchdog
 
 ### 1. Create docker-compose.yml
 
@@ -62,6 +62,7 @@ docker run -d \
   -e TZ=Europe/Warsaw \
   kacper1263/pangolin-watchdog:v1.0
 ```
+> change v1.0 to current version
 
 ## Building from Source
 
