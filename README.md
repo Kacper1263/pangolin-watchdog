@@ -56,7 +56,7 @@ services:
 Then start the service:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### 3. Access the Dashboard
