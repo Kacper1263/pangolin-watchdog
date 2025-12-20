@@ -1,0 +1,115 @@
+﻿@using PangolinWatchdog.Data
+@using MudBlazor
+@using System.Text.RegularExpressions
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" Label="Rule Name" @bind-Value="Rule.Name" Required="true" />
+        
+        <MudStack Row="true" Class="mt-4" AlignItems="AlignItems.Center">
+            <MudSwitch T="bool" Label="Use Regex" Color="Color.Secondary" @bind-Value="Rule.UseRegex" />
+            
+            <MudTextField T="string" Label="@(Rule.UseRegex ? "Regex Pattern" : "Exact Match")" 
+                          @bind-Value="Rule.Pattern" 
+                          HelperText="@(Rule.UseRegex ? "e.g. wp-.*|xmlrpc" : "e.g. /config.php")" 
+                          Required="true" 
+                          Immediate="true"/> 
+        </MudStack>
+
+        @if (Rule.UseRegex)
+        {
+            <MudPaper Class="pa-4 my-4 mud-theme-dark" Elevation="0" Outlined="true">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-2">Regex Tester</MudText>
+                
+                @{
+                    var result = GetTesterResult();
+                }
+
+                <MudGrid>
+                    <MudItem xs="8">
+                        <MudTextField T="string" @bind-Value="_testString" 
+                                      Label="Test String (e.g. /wp-admin/login.php)" 
+                                      Variant="Variant.Filled" 
+                                      Margin="Margin.Dense"
+                                      Immediate="true" />
+                    </MudItem>
+                    <MudItem xs="4" Class="d-flex align-center">
+                        <MudChip T="string" Icon="@result.Icon" Color="@result.Color" Variant="Variant.Filled">
+                            @result.Text
+                        </MudChip>
+                    </MudItem>
+                </MudGrid>
+                
+                @if(result.Color == Color.Error && result.Text == "Invalid Syntax")
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error">Check your regex syntax (e.g. unclosed parenthesis).</MudText>
+                }
+            </MudPaper>
+        }
+        <MudNumericField T="int?" Label="Ban Duration (Minutes)" 
+                         @bind-Value="Rule.BanDurationMinutes" 
+                         Min="1" 
+                         Class="mt-4"
+                         HelperText="Leave empty to use global default" />
+
+        <MudDivider Class="my-4"/>
+
+        <MudSwitch T="bool" Label="Global Rule" Color="Color.Primary" @bind-Value="Rule.IsGlobal" />
+
+        @if (Rule.IsGlobal)
+        {
+            <MudTextField T="string" Label="Excluded Resources (Optional)" 
+                          @bind-Value="Rule.ExcludedResourceNames"
+                          HelperText="Comma separated IDs to ignore" />
+        }
+        else
+        {
+            <MudTextField T="string" Label="Target Resource ID" 
+                          @bind-Value="Rule.TargetResourceName"
+                          HelperText="The specific resource ID from Pangolin" Required="true"/>
+        }
+
+        <MudSwitch T="bool" Label="Active" Color="Color.Success" @bind-Value="Rule.IsActive" />
+
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] 
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public WatchdogRule Rule { get; set; } = new();
+
+    // Field for the tester input
+    private string _testString = "";
+
+    void Submit() => MudDialog.Close(DialogResult.Ok(Rule));
+    void Cancel() => MudDialog.Cancel();
+
+    // Logic for the tester chip
+    private (string Icon, Color Color, string Text) GetTesterResult()
+    {
+        if (string.IsNullOrWhiteSpace(_testString))
+            return (Icons.Material.Filled.Help, Color.Default, "Waiting...");
+
+        if (string.IsNullOrWhiteSpace(Rule.Pattern))
+            return (Icons.Material.Filled.Help, Color.Default, "No Pattern");
+
+        try
+        {
+            var match = Regex.IsMatch(_testString, Rule.Pattern, RegexOptions.IgnoreCase);
+            if (match) 
+                return (Icons.Material.Filled.CheckCircle, Color.Success, "MATCH");
+            
+            return (Icons.Material.Filled.Cancel, Color.Error, "NO MATCH");
+        }
+        catch
+        {
+            return (Icons.Material.Filled.Error, Color.Error, "Invalid Syntax");
+        }
+    }
+}

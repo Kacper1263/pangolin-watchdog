@@ -1,0 +1,26 @@
+﻿@inherits LayoutComponentBase
+
+<MudThemeProvider IsDarkMode="true" />
+<MudDialogProvider @rendermode="InteractiveServer" />
+<MudSnackbarProvider @rendermode="InteractiveServer" />
+<MudPopoverProvider @rendermode="InteractiveServer" />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudText Typo="Typo.h5" Class="ml-3">Pangolin Watchdog</MudText>
+        <MudSpacer />
+        <AuthorizeView>
+            <Authorized>
+                <MudButton Href="/" Variant="Variant.Text" Color="Color.Inherit" Class="mx-2">Dashboard</MudButton>
+                <MudButton Href="/configuration" Variant="Variant.Text" Color="Color.Inherit" Class="mx-2">Configuration</MudButton>
+                <MudSpacer/>
+                <MudButton Href="/api/logout" Variant="Variant.Outlined" Color="Color.Inherit">Logout</MudButton>
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>

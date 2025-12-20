@@ -1,0 +1,199 @@
+﻿@page "/configuration"
+@using Microsoft.AspNetCore.Authorization
+@using PangolinWatchdog.Data
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@inject AppDbContext Db
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<PageTitle>Configuration</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">System Configuration</MudText>
+
+<MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+    
+    <MudTabPanel Text="General Settings" Icon="@Icons.Material.Filled.Settings">
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6">Pangolin API</MudText>
+                        <MudTextField @bind-Value="_config.PangolinApiUrl" Label="API URL" Variant="Variant.Text" />
+                        <MudTextField @bind-Value="_config.PangolinOrgId" Label="Organization Name" HelperText="'main'" Variant="Variant.Text" />
+                        <MudTextField @bind-Value="_config.PangolinApiToken" Label="API Token" InputType="InputType.Password" Variant="Variant.Text" />
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6">Watchdog Timers</MudText>
+                        <MudNumericField @bind-Value="_config.LogPollingIntervalSeconds" Label="Log Polling Interval (Seconds)" Min="10" />
+                        <MudNumericField @bind-Value="_config.BanCleanupIntervalMinutes" Label="Ban Cleanup Interval (Minutes)" Min="5" />
+                        <MudNumericField @bind-Value="_config.DefaultBanDurationMinutes" Label="Default Ban Duration (Minutes)" Min="1" />
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" Class="d-flex justify-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveConfig" StartIcon="@Icons.Material.Filled.Save">
+                    Save Settings
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Blocking Rules" Icon="@Icons.Material.Filled.Security">
+        <MudTable Items="@_rules" Hover="true" Elevation="0">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Defined Rules</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => OpenRuleDialog(null))">
+                    Add Rule
+                </MudButton>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>Status</MudTh>
+                <MudTh>Name</MudTh>
+                <MudTh>Pattern</MudTh>
+                <MudTh>Scope</MudTh>
+                <MudTh>Ban Time</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate Context="rule">
+                <MudTd>
+                    @if(rule.IsActive) { <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/> }
+                    else { <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/> }
+                </MudTd>
+                <MudTd>@rule.Name</MudTd>
+                <MudTd>
+                    @if(rule.UseRegex)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">REGEX</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">EXACT</MudChip>
+                    }
+                    <code>@rule.Pattern</code>
+                </MudTd>
+                <MudTd>
+                    @if (rule.IsGlobal)
+                    {
+                        <MudText Color="Color.Info">Global</MudText>
+                        @if(!string.IsNullOrEmpty(rule.ExcludedResourceNames))
+                        {
+                            <MudText Typo="Typo.caption">Excl: @rule.ExcludedResourceNames</MudText>
+                        }
+                    }
+                    else
+                    {
+                         <MudText>Res: <b>@rule.TargetResourceName</b></MudText>
+                    }
+                </MudTd>
+                <MudTd>
+                    @(rule.BanDurationMinutes.HasValue ? $"{rule.BanDurationMinutes} min" : "Default")
+                </MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="@(() => OpenRuleDialog(rule))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteRule(rule))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudTabPanel>
+
+</MudTabs>
+
+@code {
+    private AppConfig _config = new();
+    private List<WatchdogRule> _rules = new();
+
+    protected override void OnInitialized()
+    {
+        // Load Config
+        var existingConfig = Db.Configurations.FirstOrDefault();
+        if (existingConfig == null)
+        {
+            existingConfig = new AppConfig();
+            Db.Configurations.Add(existingConfig);
+            Db.SaveChanges();
+        }
+        _config = existingConfig;
+
+        // Load Rules
+        _rules = Db.Rules.ToList();
+    }
+
+    private void SaveConfig()
+    {
+        Db.SaveChanges();
+        Snackbar.Add("Settings saved successfully!", Severity.Success);
+    }
+
+    private async Task OpenRuleDialog(WatchdogRule? rule)
+    {
+        var isNew = rule == null;
+        
+        // Clone object for editing to avoid EF tracking issues during cancel
+        var ruleModel = isNew ? new WatchdogRule() : new WatchdogRule 
+        { 
+            Id = rule!.Id, 
+            Name = rule.Name, 
+            Pattern = rule.Pattern, 
+            UseRegex = rule.UseRegex,
+            IsGlobal = rule.IsGlobal, 
+            TargetResourceName = rule.TargetResourceName, 
+            ExcludedResourceNames = rule.ExcludedResourceNames, 
+            BanDurationMinutes = rule.BanDurationMinutes,
+            IsActive = rule.IsActive
+        };
+
+        var parameters = new DialogParameters<PangolinWatchdog.Components.Dialogs.RuleDialog> { { x => x.Rule, ruleModel } };
+        var dialog = await DialogService.ShowAsync<PangolinWatchdog.Components.Dialogs.RuleDialog>(isNew ? "Add Rule" : "Edit Rule", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            var savedRule = (WatchdogRule)result.Data;
+
+            if (isNew)
+            {
+                Db.Rules.Add(savedRule);
+            }
+            else
+            {
+                // Find existing entity and update props
+                var entity = Db.Rules.First(r => r.Id == savedRule.Id);
+                entity.Name = savedRule.Name;
+                entity.Pattern = savedRule.Pattern;
+                entity.UseRegex = savedRule.UseRegex;
+                entity.IsGlobal = savedRule.IsGlobal;
+                entity.TargetResourceName = savedRule.TargetResourceName;
+                entity.ExcludedResourceNames = savedRule.ExcludedResourceNames;
+                entity.BanDurationMinutes = savedRule.BanDurationMinutes;
+                entity.IsActive = savedRule.IsActive;
+            }
+
+            Db.SaveChanges();
+            _rules = Db.Rules.ToList(); // Refresh list
+            Snackbar.Add("Rule saved!", Severity.Success);
+        }
+    }
+
+    private async Task DeleteRule(WatchdogRule rule)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Warning", 
+            $"Delete rule '{rule.Name}'?", 
+            yesText:"Delete", cancelText:"Cancel");
+
+        if (result == true)
+        {
+            Db.Rules.Remove(rule);
+            Db.SaveChanges();
+            _rules = Db.Rules.ToList();
+            Snackbar.Add("Rule deleted.", Severity.Info);
+        }
+    }
+}

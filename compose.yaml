@@ -1,0 +1,12 @@
+﻿services:
+  watchdog:
+    image: pangolin-watchdog:latest
+    container_name: pangolin-watchdog
+    restart: unless-stopped
+    ports:
+      - "8855:8080" 
+    volumes:
+      - ./data:/app/data
+    environment:
+      - ADMIN_PASSWORD=watchdogadmin # Set your admin password
+      - TZ=Europe/Warsaw # Set your timezone

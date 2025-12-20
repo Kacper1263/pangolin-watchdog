@@ -1,0 +1,52 @@
+﻿@page "/login"
+@layout Layout.EmptyLayout
+@using System.ComponentModel.DataAnnotations
+
+<style>
+    body, html {
+        overflow: hidden;
+        height: 100%;
+        margin: 0;
+    }
+</style>
+
+<div class="d-flex align-center justify-center mud-theme-primary" 
+     style="height: 100vh; width: 100vw;">
+
+    <MudPaper Elevation="6" Class="pa-8 rounded-lg" Width="400px">
+        <form action="/api/login" method="post">
+            
+            <MudStack AlignItems="AlignItems.Center" Class="mb-6">
+                <MudIcon Icon="@Icons.Material.Filled.Security" Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.h4">Pangolin Watchdog</MudText>
+            </MudStack>
+
+            <MudTextField T="string" Name="password" Label="Admin Password" 
+                          InputType="InputType.Password" 
+                          Variant="Variant.Outlined" Class="mb-6" />
+            
+            <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+            
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" 
+                       Color="Color.Primary" FullWidth="true" Size="Size.Large">
+                Login
+            </MudButton>
+            
+            @if (ShowError)
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4" Dense="true">Invalid password!</MudAlert>
+            }
+        </form>
+    </MudPaper>
+
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    public bool ShowError { get; set; }
+
+    [Inject] Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery { get; set; } = default!;
+    [Inject] IHttpContextAccessor HttpContextAccessor { get; set; } = default!;
+
+    private string Token => Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!).RequestToken!;
+}
