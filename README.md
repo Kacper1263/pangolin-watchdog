@@ -20,6 +20,14 @@ A monitoring and security application that automatically protects your web resou
 - **Docker Support**: Easy deployment with Docker and Docker Compose
 - **SQLite Database**: Lightweight data persistence for configuration and ban history
 
+## How It Works
+
+1. **Log Monitoring**: The background worker continuously polls the Pangolin API for new access logs
+2. **Rule Evaluation**: Each log entry is evaluated against active watchdog rules
+3. **Automatic Banning**: When a log matches a rule, the IP is automatically banned via Pangolin API. Service is adding new block IP rule with **last + 1 priority (this is current limitation, it can not work for example if you have some allow country rules first - I'm working on it)**
+4. **Ban Tracking**: All bans are recorded in the local database with expiration times
+5. **Dashboard Updates**: The web dashboard displays real-time statistics and ban history
+
 ## Prerequisites
 
 - Pangolin Integration API enabled
@@ -149,14 +157,6 @@ environment:
 export ADMIN_PASSWORD=your_secure_password
 dotnet run
 ```
-
-## How It Works
-
-1. **Log Monitoring**: The background worker continuously polls the Pangolin API for new access logs
-2. **Rule Evaluation**: Each log entry is evaluated against active watchdog rules
-3. **Automatic Banning**: When a log matches a rule, the IP is automatically banned via Pangolin API
-4. **Ban Tracking**: All bans are recorded in the local database with expiration times
-5. **Dashboard Updates**: The web dashboard displays real-time statistics and ban history
 
 ## Maintenance
 
