@@ -22,6 +22,22 @@ A monitoring and security application that automatically protects your web resou
 
 ## Prerequisites
 
+- Pangolin Integration API enabled
+  - Refer to Pangolin documentation: https://docs.pangolin.net/manage/integration-api
+  - For Community Edition: https://docs.pangolin.net/self-host/advanced/integration-api
+- Pangolin API Token with appropriate permissions
+  - List organizations
+  - Get organizations
+  - List organizations domains
+  - Get site
+  - List sites
+  - Get resource
+  - List resources
+  - Create resource rule
+  - Delete resource rule
+  - List resource rules
+  - (Logs) Allow all
+
 ### For Docker Deployment (Recommended)
 - Docker
 - Docker Compose
