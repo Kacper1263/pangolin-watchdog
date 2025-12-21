@@ -54,7 +54,7 @@
             <MudTableSortLabel SortLabel="BannedAt" InitialDirection="SortDirection.Descending" T="BannedIp">Banned At</MudTableSortLabel>
             <MudStack Row="true" Spacing="1">
                 <MudSelect @bind-Value="_filters.BannedAtOperator" Placeholder="Op" Dense="true" @bind-Value:after="OnFilterChanged" PopoverClass="filter-operator-popup">
-                    <MudSelectItem Value="@DateFilterOperator.None"></MudSelectItem>
+                    @*<MudSelectItem Value="@DateFilterOperator.None"></MudSelectItem>*@
                     <MudSelectItem Value="@DateFilterOperator.Equals">=</MudSelectItem>
                     <MudSelectItem Value="@DateFilterOperator.LessThan">&lt;</MudSelectItem>
                     <MudSelectItem Value="@DateFilterOperator.GreaterThan">&gt;</MudSelectItem>
@@ -66,7 +66,7 @@
             <MudTableSortLabel SortLabel="ExpiresAt" T="BannedIp">Expires At</MudTableSortLabel>
             <MudStack Row="true" Spacing="1">
                 <MudSelect @bind-Value="_filters.ExpiresAtOperator" Placeholder="Op" Dense="true" @bind-Value:after="OnFilterChanged" PopoverClass="filter-operator-popup">
-                    <MudSelectItem Value="@DateFilterOperator.None"></MudSelectItem>
+                    @* <MudSelectItem Value="@DateFilterOperator.None"></MudSelectItem> *@
                     <MudSelectItem Value="@DateFilterOperator.Equals">=</MudSelectItem>
                     <MudSelectItem Value="@DateFilterOperator.LessThan">&lt;</MudSelectItem>
                     <MudSelectItem Value="@DateFilterOperator.GreaterThan">&gt;</MudSelectItem>
@@ -102,7 +102,7 @@
         <MudText Class="pa-4" Align="Align.Center">Database is empty.</MudText>
     </NoRecordsContent>
     <PagerContent>
-        <MudTablePager PageSizeOptions="new int[]{10, 25, 50, 100}" />
+        <MudTablePager PageSizeOptions="new int[]{10, 25, 50, 100, 200, 500}" />
     </PagerContent>
 </MudTable>
 
@@ -170,21 +170,57 @@
         var query = db.BannedIps.Include(b => b.Resource).AsQueryable();
 
         // Apply text filters (case-insensitive for SQLite)
+        query = ApplyFiltersToQuery(query);
+
+        // Apply sorting  
+        query = state.SortLabel switch
+        {
+            "IpAddress" => query.OrderByDirection(state.SortDirection, o => o.IpAddress),
+            "Reason" => query.OrderByDirection(state.SortDirection, o => o.Reason),
+            "Resource" => query.OrderByDirection(state.SortDirection, o => o.Resource.Name),
+            "ExpiresAt" => query.OrderByDirection(state.SortDirection, o => o.ExpiresAt),
+            "BannedAt" => query.OrderByDirection(state.SortDirection, o => o.BannedAt),
+            _ => query.OrderByDescending(o => o.BannedAt)
+        };
+
+        var totalItems = await query.CountAsync(token);
+        var items = await query
+            .Skip(state.Page * state.PageSize)
+            .Take(state.PageSize)
+            .ToListAsync(token);
+
+        _activeBansCount = await db.BannedIps
+            .CountAsync(b => b.ExpiresAt == null || b.ExpiresAt > DateTime.Now, token);
+
+        var config = await db.Configurations.FirstOrDefaultAsync(token);
+        if (config != null)
+        {
+            _lastLogId = config.LastProcessedLogId;
+        }
+
+        return new TableData<BannedIp> { TotalItems = totalItems, Items = items };
+    }
+
+    private IQueryable<BannedIp> ApplyFiltersToQuery(IQueryable<BannedIp> query)
+    {
         if (!string.IsNullOrWhiteSpace(_filters.IpAddress))
         {
-            query = query.Where(b => EF.Functions.Like(b.IpAddress, $"%{_filters.IpAddress}%"));
+            var escapedIp = EscapeLikeValue(_filters.IpAddress);
+            query = query.Where(b => EF.Functions.Like(b.IpAddress, $"%{escapedIp}%"));
         }
 
         if (!string.IsNullOrWhiteSpace(_filters.Resource))
         {
-            query = query.Where(b => EF.Functions.Like(b.Resource.Name, $"%{_filters.Resource}%"));
+            var escapedResource = EscapeLikeValue(_filters.Resource);
+            query = query.Where(b => EF.Functions.Like(b.Resource.Name, $"%{escapedResource}%"));
         }
 
         if (!string.IsNullOrWhiteSpace(_filters.Reason))
         {
-            query = query.Where(b => EF.Functions.Like(b.Reason, $"%{_filters.Reason}%"));
+            var escapedReason = EscapeLikeValue(_filters.Reason);
+            query = query.Where(b => EF.Functions.Like(b.Reason, $"%{escapedReason}%"));
         }
-
+        
         // Apply BannedAt date filter
         if (_filters.BannedAtOperator != DateFilterOperator.None && _filters.BannedAt.HasValue)
         {
@@ -218,32 +254,7 @@
             }
         }
 
-        query = state.SortLabel switch
-        {
-            "IpAddress" => query.OrderByDirection(state.SortDirection, o => o.IpAddress),
-            "Reason" => query.OrderByDirection(state.SortDirection, o => o.Reason),
-            "Resource" => query.OrderByDirection(state.SortDirection, o => o.Resource.Name),
-            "ExpiresAt" => query.OrderByDirection(state.SortDirection, o => o.ExpiresAt),
-            "BannedAt" => query.OrderByDirection(state.SortDirection, o => o.BannedAt),
-            _ => query.OrderByDescending(o => o.BannedAt)
-        };
-
-        var totalItems = await query.CountAsync(token);
-        var items = await query
-            .Skip(state.Page * state.PageSize)
-            .Take(state.PageSize)
-            .ToListAsync(token);
-
-        _activeBansCount = await db.BannedIps
-            .CountAsync(b => b.ExpiresAt == null || b.ExpiresAt > DateTime.Now, token);
-
-        var config = await db.Configurations.FirstOrDefaultAsync(token);
-        if (config != null)
-        {
-            _lastLogId = config.LastProcessedLogId;
-        }
-
-        return new TableData<BannedIp> { TotalItems = totalItems, Items = items };
+        return query;
     }
 
     public void Dispose()
@@ -268,8 +279,17 @@
         public string Resource { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;
         public DateTime? BannedAt { get; set; }
-        public DateFilterOperator BannedAtOperator { get; set; } = DateFilterOperator.None;
+        public DateFilterOperator BannedAtOperator { get; set; } = DateFilterOperator.Equals;
         public DateTime? ExpiresAt { get; set; }
-        public DateFilterOperator ExpiresAtOperator { get; set; } = DateFilterOperator.None;
+        public DateFilterOperator ExpiresAtOperator { get; set; } = DateFilterOperator.Equals;
+    }
+
+    private static string EscapeLikeValue(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        // Escape %, _, and [ by wrapping them in []
+        return value.Replace("[", "[[")
+                    .Replace("%", "[%]")
+                    .Replace("_", "[_]");
     }
 }
