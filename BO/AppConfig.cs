@@ -9,7 +9,7 @@ public class AppConfig
     
     // Pangolin API Settings
     public string PangolinApiUrl { get; set; } = "https://api.pangolin.example.com/v1";
-    public string PangolinOrgId { get; set; } = "main";
+    public string PangolinOrgId { get; set; } = string.Empty;
     public string PangolinApiToken { get; set; } = string.Empty;
 
     // Watchdog Cycle Settings

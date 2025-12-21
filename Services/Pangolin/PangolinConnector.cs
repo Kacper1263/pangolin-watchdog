@@ -235,6 +235,52 @@ public class PangolinConnector
         }
     }
 
+    public async Task<List<PangolinOrgEntry>> GetOrgsAsync(AppConfig config)
+    {
+        var allOrgs = new List<PangolinOrgEntry>();
+        var limit = 1000;
+        var offset = 0;
+        var morePagesAvailable = true;
+
+        try
+        {
+            while (morePagesAvailable)
+            {
+                var url = $"{config.PangolinApiUrl.TrimEnd('/')}/orgs?limit={limit}&offset={offset}";
+                
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                AddAuthHeader(request, config);
+
+                var response = await _http.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var result = await response.Content.ReadFromJsonAsync<PangolinOrgsResponse>();
+                var batch = result?.Data?.Orgs ?? new List<PangolinOrgEntry>();
+
+                if (batch.Count > 0)
+                {
+                    allOrgs.AddRange(batch);
+                }
+
+                if (batch.Count < limit)
+                {
+                    morePagesAvailable = false;
+                }
+                else
+                {
+                    offset += limit;
+                }
+            }
+
+            return allOrgs;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch organizations from Pangolin API (Offset: {Offset})", offset);
+            throw;
+        }
+    }
+
     private void AddAuthHeader(HttpRequestMessage request, AppConfig config)
     {
         if (!string.IsNullOrEmpty(config.PangolinApiToken))

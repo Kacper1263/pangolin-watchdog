@@ -3,6 +3,7 @@
 @using PangolinWatchdog.Data
 @using Microsoft.EntityFrameworkCore
 @using PangolinWatchdog.Services.Pangolin
+@using PangolinWatchdog.DTO.Pangolin
 @attribute [Authorize]
 @inject AppDbContext Db
 @inject IDialogService DialogService
@@ -23,7 +24,16 @@
                     <MudCardContent>
                         <MudText Typo="Typo.h6">Pangolin API</MudText>
                         <MudTextField @bind-Value="_config.PangolinApiUrl" Label="API URL" Variant="Variant.Text" />
-                        <MudTextField @bind-Value="_config.PangolinOrgId" Label="Organization Name" HelperText="'main'" Variant="Variant.Text" />
+                        <MudAutocomplete T="PangolinOrgEntry" 
+                                         Label="Organization ID" 
+                                         Value="_selectedOrg"
+                                         ValueChanged="OnOrgSelected"
+                                         SearchFunc="@SearchOrgs"
+                                         ResetValueOnEmptyText="false"
+                                         ShowProgressIndicator="@_loadingOrgs"
+                                         ToStringFunc="@(org => org == null ? _config.PangolinOrgId : $"{org.OrgId} ({org.Name})")"
+                                         Variant="Variant.Text"
+                                         HelperText="Type or click to load organizations" />
                         <MudTextField @bind-Value="_config.PangolinApiToken" Label="API Token" InputType="InputType.Password" Variant="Variant.Text" />
                     </MudCardContent>
                 </MudCard>
@@ -126,6 +136,9 @@
 @code {
     private AppConfig _config = new();
     private List<WatchdogRule> _rules = new();
+    private List<PangolinOrgEntry> _organizations = new();
+    private bool _loadingOrgs = false;
+    private PangolinOrgEntry? _selectedOrg = null;
 
     protected override void OnInitialized()
     {
@@ -151,6 +164,51 @@
     {
         Db.SaveChanges();
         Snackbar.Add("Settings saved successfully!", Severity.Success);
+    }
+
+    private void OnOrgSelected(PangolinOrgEntry? org)
+    {
+        _selectedOrg = org;
+        if (org != null)
+        {
+            _config.PangolinOrgId = org.OrgId;
+        }
+    }
+
+    private async Task<IEnumerable<PangolinOrgEntry>> SearchOrgs(string value, CancellationToken token)
+    {
+        if(string.IsNullOrWhiteSpace(_config.PangolinApiUrl) || string.IsNullOrWhiteSpace(_config.PangolinApiToken))
+        {
+            Snackbar.Add("Please enter Pangolin API URL and Token first and click save!", Severity.Warning);
+            return new List<PangolinOrgEntry>();
+        }
+        
+        _loadingOrgs = true;
+        StateHasChanged();
+
+        try
+        {
+            _organizations = await PangolinConnector.GetOrgsAsync(_config);
+            
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return _organizations;
+            }
+            
+            return _organizations
+                .Where(o => o.OrgId.Contains(value, StringComparison.InvariantCultureIgnoreCase) || 
+                           o.Name.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load organizations: {ex.Message}", Severity.Error);
+            return new List<PangolinOrgEntry>();
+        }
+        finally
+        {
+            _loadingOrgs = false;
+            StateHasChanged();
+        }
     }
 
     private async Task RefreshResources()
@@ -199,6 +257,13 @@
 
     private async Task OpenRuleDialog(WatchdogRule? rule)
     {
+        // if there is no resources in the system, sync them first
+        if (!Db.Resources.Any())
+        {
+            Snackbar.Add("No resources found in the system. Fetching resources from Pangolin...", Severity.Info);
+            await RefreshResources();
+        }
+        
         var isNew = rule == null;
         
         var ruleModel = isNew ? new WatchdogRule() : new WatchdogRule 
