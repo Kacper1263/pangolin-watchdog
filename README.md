@@ -62,33 +62,7 @@ docker run -d \
   -e TZ=Europe/Warsaw \
   kacper1263/pangolin-watchdog:v1.0.1
 ```
-> change v1.0 to current version
-
-## Building from Source
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/Kacper1263/pangolin-watchdog.git
-cd pangolin-watchdog
-```
-
-### 2. Run Locally
-
-```bash
-dotnet restore
-dotnet run
-```
-
-The application will start and display the listening address (typically `http://localhost:5000`).
-
-### 3. Build Custom Docker Image
-
-```bash
-docker build -t pangolin-watchdog:custom .
-```
-
-Then update the `image` field in `docker-compose.yml` to use your custom image.
+> change v1.0.1 to current version
 
 ## Configuration
 
@@ -101,7 +75,9 @@ Then update the `image` field in `docker-compose.yml` to use your custom image.
    - **Organization ID**: Your Pangolin organization ID (name - visible in top left corner in your Pangolin dashboard)
    - **API Token**: Your Pangolin API authentication token
    - **Log Polling Interval**: How often to check for new logs (in seconds)
+   - **Ban Cleanup Interval**: How often to check for expired bans (in minutes)
    - **Default Ban Duration**: Default duration for IP bans (in minutes)
+4. **Sync your resources list via "refresh resources list" button**
 
 ### Creating Watchdog Rules
 
@@ -109,7 +85,7 @@ Rules define which access patterns should trigger automatic IP bans.
 
 **Rule Types:**
 - **Global Rules**: Apply to all resources (with optional exclusions)
-- **Resource-Specific Rules**: Target specific resources by ID, name, or host
+- **Resource-Specific Rules**: Target specific resources
 
 **Pattern Matching:**
 - **Exact Match**: Match exact URL paths
@@ -119,6 +95,12 @@ Rules define which access patterns should trigger automatic IP bans.
 - Block access to admin panels: Pattern `/admin` or `/wp-admin`
 - Block SQL injection attempts: Regex `.*(\bunion\b|\bselect\b).*`
 - Block specific file types: Regex `.*\.(php|asp|jsp)$`
+
+## How to update
+
+**‼️ Always backup your `data/watchdog.db` file before updating ‼️**
+
+If you are using docker compose, just bump version number and use `docker compose up -d` (docker will automaticly pull new image and recreate your container)
 
 ## Technology Stack
 
@@ -175,3 +157,29 @@ Application logs are written to the console with the following levels:
 - **ERROR**: API failures and critical errors
 
 Configure logging in `appsettings.json`.
+
+## Building from Source
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Kacper1263/pangolin-watchdog.git
+cd pangolin-watchdog
+```
+
+### 2. Run Locally
+
+```bash
+dotnet restore
+dotnet run
+```
+
+The application will start and display the listening address (typically `http://localhost:5000`).
+
+### 3. Build Custom Docker Image
+
+```bash
+docker build -t pangolin-watchdog:custom .
+```
+
+Then update the `image` field in `docker-compose.yml` to use your custom image.
