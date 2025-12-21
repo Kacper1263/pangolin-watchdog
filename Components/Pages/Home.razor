@@ -9,6 +9,12 @@
 
 <PageTitle>Dashboard</PageTitle>
 
+<style>
+    .filter-operator-popup {
+        min-width: 70px !important;
+    }
+</style>
+
 <MudGrid>
     <MudItem xs="12" sm="6" md="4">
         <MudPaper Class="pa-4 d-flex flex-column align-center justify-center mud-theme-primary">
@@ -32,11 +38,43 @@
 
 <MudTable @ref="_table" ServerData="@ServerReload" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="4">
     <HeaderContent>
-        <MudTh><MudTableSortLabel SortLabel="IpAddress" T="BannedIp">IP Address</MudTableSortLabel></MudTh>
-        <MudTh><MudTableSortLabel SortLabel="Resource" T="BannedIp">Resource</MudTableSortLabel></MudTh>
-        <MudTh><MudTableSortLabel SortLabel="Reason" T="BannedIp">Reason</MudTableSortLabel></MudTh>
-        <MudTh><MudTableSortLabel SortLabel="BannedAt" InitialDirection="SortDirection.Descending" T="BannedIp">Banned At</MudTableSortLabel></MudTh>
-        <MudTh><MudTableSortLabel SortLabel="ExpiresAt" T="BannedIp">Expires At</MudTableSortLabel></MudTh>
+        <MudTh>
+            <MudTableSortLabel SortLabel="IpAddress" T="BannedIp">IP Address</MudTableSortLabel>
+            <MudTextField @bind-Value="_filters.IpAddress" Placeholder="Filter IP" Immediate="true" @bind-Value:after="OnFilterChanged" Clearable="true" />
+        </MudTh>
+        <MudTh>
+            <MudTableSortLabel SortLabel="Resource" T="BannedIp">Resource</MudTableSortLabel>
+            <MudTextField @bind-Value="_filters.Resource" Placeholder="Filter Resource" Immediate="true" @bind-Value:after="OnFilterChanged" Clearable="true" />
+        </MudTh>
+        <MudTh>
+            <MudTableSortLabel SortLabel="Reason" T="BannedIp">Reason</MudTableSortLabel>
+            <MudTextField @bind-Value="_filters.Reason" Placeholder="Filter Reason" Immediate="true" @bind-Value:after="OnFilterChanged" Clearable="true" />
+        </MudTh>
+        <MudTh>
+            <MudTableSortLabel SortLabel="BannedAt" InitialDirection="SortDirection.Descending" T="BannedIp">Banned At</MudTableSortLabel>
+            <MudStack Row="true" Spacing="1">
+                <MudSelect @bind-Value="_filters.BannedAtOperator" Placeholder="Op" Dense="true" @bind-Value:after="OnFilterChanged" PopoverClass="filter-operator-popup">
+                    <MudSelectItem Value="@DateFilterOperator.None"></MudSelectItem>
+                    <MudSelectItem Value="@DateFilterOperator.Equals">=</MudSelectItem>
+                    <MudSelectItem Value="@DateFilterOperator.LessThan">&lt;</MudSelectItem>
+                    <MudSelectItem Value="@DateFilterOperator.GreaterThan">&gt;</MudSelectItem>
+                </MudSelect>
+                <MudDatePicker @bind-Date="_filters.BannedAt" @bind-Date:after="OnFilterChanged" Placeholder="Date" Dense="true" Clearable="true" Style="min-width: 150px;" Disabled="@(_filters.BannedAtOperator == DateFilterOperator.None)" />
+            </MudStack>
+        </MudTh>
+        <MudTh>
+            <MudTableSortLabel SortLabel="ExpiresAt" T="BannedIp">Expires At</MudTableSortLabel>
+            <MudStack Row="true" Spacing="1">
+                <MudSelect @bind-Value="_filters.ExpiresAtOperator" Placeholder="Op" Dense="true" @bind-Value:after="OnFilterChanged" PopoverClass="filter-operator-popup">
+                    <MudSelectItem Value="@DateFilterOperator.None"></MudSelectItem>
+                    <MudSelectItem Value="@DateFilterOperator.Equals">=</MudSelectItem>
+                    <MudSelectItem Value="@DateFilterOperator.LessThan">&lt;</MudSelectItem>
+                    <MudSelectItem Value="@DateFilterOperator.GreaterThan">&gt;</MudSelectItem>
+                    <MudSelectItem Value="@DateFilterOperator.IsNull">Empty</MudSelectItem>
+                </MudSelect>
+                <MudDatePicker @bind-Date="_filters.ExpiresAt" @bind-Date:after="OnFilterChanged" Placeholder="Date" Dense="true" Clearable="true" Style="min-width: 150px;" Disabled="@(_filters.ExpiresAtOperator == DateFilterOperator.None || _filters.ExpiresAtOperator == DateFilterOperator.IsNull)" />
+            </MudStack>
+        </MudTh>
         <MudTh>Status</MudTh>
     </HeaderContent>
     <RowTemplate Context="ban">
@@ -77,6 +115,8 @@
     private PeriodicTimer? _timer;
     private readonly CancellationTokenSource _cts = new();
     
+    private FilterModel _filters = new();
+    
     protected override async Task OnInitializedAsync()
     {
         using (var db = await DbFactory.CreateDbContextAsync())
@@ -90,6 +130,14 @@
 
         _timer = new PeriodicTimer(TimeSpan.FromSeconds(_autoRefreshTimerSeconds));
         _ = RunAutoRefresh();
+    }
+
+    private async Task OnFilterChanged()
+    {
+        if (_table is not null)
+        {
+            await _table.ReloadServerData();
+        }
     }
 
     private async Task RunAutoRefresh()
@@ -120,6 +168,55 @@
         using var db = await DbFactory.CreateDbContextAsync(token);
 
         var query = db.BannedIps.Include(b => b.Resource).AsQueryable();
+
+        // Apply text filters (case-insensitive for SQLite)
+        if (!string.IsNullOrWhiteSpace(_filters.IpAddress))
+        {
+            query = query.Where(b => EF.Functions.Like(b.IpAddress, $"%{_filters.IpAddress}%"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_filters.Resource))
+        {
+            query = query.Where(b => EF.Functions.Like(b.Resource.Name, $"%{_filters.Resource}%"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_filters.Reason))
+        {
+            query = query.Where(b => EF.Functions.Like(b.Reason, $"%{_filters.Reason}%"));
+        }
+
+        // Apply BannedAt date filter
+        if (_filters.BannedAtOperator != DateFilterOperator.None && _filters.BannedAt.HasValue)
+        {
+            var filterDate = _filters.BannedAt.Value.Date;
+            query = _filters.BannedAtOperator switch
+            {
+                DateFilterOperator.Equals => query.Where(b => b.BannedAt.Date == filterDate),
+                DateFilterOperator.LessThan => query.Where(b => b.BannedAt.Date < filterDate),
+                DateFilterOperator.GreaterThan => query.Where(b => b.BannedAt.Date > filterDate),
+                _ => query
+            };
+        }
+
+        // Apply ExpiresAt date filter
+        if (_filters.ExpiresAtOperator != DateFilterOperator.None)
+        {
+            if (_filters.ExpiresAtOperator == DateFilterOperator.IsNull)
+            {
+                query = query.Where(b => !b.ExpiresAt.HasValue);
+            }
+            else if (_filters.ExpiresAt.HasValue)
+            {
+                var filterDate = _filters.ExpiresAt.Value.Date;
+                query = _filters.ExpiresAtOperator switch
+                {
+                    DateFilterOperator.Equals => query.Where(b => b.ExpiresAt.HasValue && b.ExpiresAt.Value.Date == filterDate),
+                    DateFilterOperator.LessThan => query.Where(b => b.ExpiresAt.HasValue && b.ExpiresAt.Value.Date < filterDate),
+                    DateFilterOperator.GreaterThan => query.Where(b => b.ExpiresAt.HasValue && b.ExpiresAt.Value.Date > filterDate),
+                    _ => query
+                };
+            }
+        }
 
         query = state.SortLabel switch
         {
@@ -154,5 +251,25 @@
         _cts.Cancel();
         _timer?.Dispose();
         _cts.Dispose();
+    }
+
+    private enum DateFilterOperator
+    {
+        None,
+        Equals,
+        LessThan,
+        GreaterThan,
+        IsNull
+    }
+
+    private class FilterModel
+    {
+        public string IpAddress { get; set; } = string.Empty;
+        public string Resource { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty;
+        public DateTime? BannedAt { get; set; }
+        public DateFilterOperator BannedAtOperator { get; set; } = DateFilterOperator.None;
+        public DateTime? ExpiresAt { get; set; }
+        public DateFilterOperator ExpiresAtOperator { get; set; } = DateFilterOperator.None;
     }
 }
