@@ -46,6 +46,8 @@ Example
 
 This behavior lets you limit the impact of high-priority blocking rules and retain the precedence of global `allow` rules while still automatically adding bans into available gaps.
 
+Note: `MaxPriority` is evaluated per-resource in Pangolin — it applies independently for each resource. If you use `MaxPriority` on global rules, make sure all resources that the global rule may affect are prepared/configured accordingly or use resource-specific rules instead.
+
 ## Prerequisites
 
 - Pangolin Integration API enabled
