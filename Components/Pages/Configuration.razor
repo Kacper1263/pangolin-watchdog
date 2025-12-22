@@ -292,12 +292,21 @@
             {
                 if (isNew)
                 {
+                    // When adding a new rule, EF will also try to insert any child entities
+                    // that are present in savedRule.ExcludedResources.
+                    var exclusionsToAdd = savedRule.ExcludedResources
+                        .Select(e => new RuleResourceExclusion { ResourceId = e.ResourceId })
+                        .ToList();
+
+                    // Clear navigation to prevent EF from inserting them together with the rule
+                    savedRule.ExcludedResources = new List<RuleResourceExclusion>();
+
                     Db.Rules.Add(savedRule);
                     Db.SaveChanges();
 
-                    if (savedRule.ExcludedResources.Any())
+                    if (exclusionsToAdd.Any())
                     {
-                        foreach (var exclusion in savedRule.ExcludedResources)
+                        foreach (var exclusion in exclusionsToAdd)
                         {
                             exclusion.RuleId = savedRule.Id;
                             Db.RuleResourceExclusions.Add(exclusion);
