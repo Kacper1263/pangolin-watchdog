@@ -1,5 +1,6 @@
 ﻿@inherits LayoutComponentBase
 
+
 <MudThemeProvider IsDarkMode="true" />
 <MudDialogProvider @rendermode="InteractiveServer" />
 <MudSnackbarProvider @rendermode="InteractiveServer" />
@@ -14,6 +15,7 @@
                 <MudButton Href="/" Variant="Variant.Text" Color="Color.Inherit" Class="mx-2">Dashboard</MudButton>
                 <MudButton Href="/configuration" Variant="Variant.Text" Color="Color.Inherit" Class="mx-2">Configuration</MudButton>
                 <MudSpacer/>
+                <ProblemsNotifier />
                 <MudButton Href="/api/logout" Variant="Variant.Outlined" Color="Color.Inherit">Logout</MudButton>
             </Authorized>
         </AuthorizeView>

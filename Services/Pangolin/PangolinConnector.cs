@@ -74,7 +74,7 @@ public class PangolinConnector
             if(nextPriority >= rule.MaxPriority)
             {
                 throw new MaxPriorityReachedException(
-                    $"Next priority {nextPriority} exceeds or equals MaxPriority {rule.MaxPriority.Value} for rule {rule.Name} (ID: {rule.Id}). " +
+                    $"Next priority {nextPriority} exceeds or equals MaxPriority {rule.MaxPriority.Value} for rule \"{rule.Name}\" (ID: {rule.Id}). " +
                     $"Cannot ban IP {ip}. Rule has been disabled.");
             }
 

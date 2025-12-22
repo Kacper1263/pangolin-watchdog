@@ -1,0 +1,83 @@
+@using Microsoft.EntityFrameworkCore
+@using PangolinWatchdog.Data
+@using MudBlazor
+@using PangolinWatchdog.Components.Dialogs
+@inject IDialogService DialogService
+@inject IServiceProvider ServiceProvider
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<MudIconButton Class="mr-10" OnClick="@(() => OpenProblems())" Size="Size.Medium" Color="@(_problemCount > 0 ? Color.Error : Color.Inherit)" 
+               Icon="@Icons.Material.Filled.ReportProblem" Style="@($"display:{(ShowVisible ? "inline-flex" : "none")}")" />
+
+@code {
+    private int _problemCount;
+    private CancellationTokenSource? _cts;
+
+    private bool ShowVisible => _problemCount > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshCount();
+        _cts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            while (!_cts.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(10000, _cts.Token);
+                    await InvokeAsync(RefreshCount);
+                }
+                catch (TaskCanceledException) { break; }
+                catch { /* ignore */ }
+            }
+        });
+    }
+
+    private async Task RefreshCount()
+    {
+        try
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            _problemCount = await db.Problems.CountAsync();
+            StateHasChanged();
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private async Task OpenProblems()
+    {
+        try
+        {
+            var parameters = new DialogParameters();
+            var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true, NoHeader = true};
+            var dialogRef = await DialogService.ShowAsync<ProblemsDialog>("Problems", parameters, options);
+            if (dialogRef != null)
+            {
+                // wait for dialog close
+                await dialogRef.Result;
+            }
+            else
+            {
+                Snackbar.Add("DialogService returned null reference", Severity.Warning);
+            }
+            await RefreshCount();
+        }
+        catch (Exception ex)
+        {
+            // show error to user for debugging
+            Snackbar.Add($"Failed to open problems dialog: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}
