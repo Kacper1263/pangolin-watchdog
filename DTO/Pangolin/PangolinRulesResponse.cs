@@ -26,7 +26,7 @@ public class PangolinExistingRule
     public long RuleId { get; set; }
 
     [JsonPropertyName("priority")]
-    public int Priority { get; set; }
+    public long Priority { get; set; }
 
     [JsonPropertyName("action")]
     public string Action { get; set; } = string.Empty;

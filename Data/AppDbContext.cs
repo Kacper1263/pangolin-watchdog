@@ -9,4 +9,5 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AppConfig> Configurations { get; set; }
     public DbSet<Resource> Resources { get; set; }
     public DbSet<RuleResourceExclusion> RuleResourceExclusions { get; set; }
+    public DbSet<Problem> Problems { get; set; }
 }

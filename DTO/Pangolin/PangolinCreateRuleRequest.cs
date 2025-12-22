@@ -15,7 +15,7 @@ public class PangolinCreateRuleRequest
     public string Value { get; set; } = string.Empty; // eg. The IP address
 
     [JsonPropertyName("priority")]
-    public int Priority { get; set; } // must be unique within the resource
+    public long Priority { get; set; } // must be unique within the resource
 
     [JsonPropertyName("enabled")]
     public bool Enabled { get; set; } = true;

@@ -3,6 +3,7 @@ using PangolinWatchdog.Data;
 using PangolinWatchdog.Services;
 using System.Text.RegularExpressions;
 using PangolinWatchdog.DTO.Pangolin;
+using PangolinWatchdog.Helpers.Exceptions;
 using PangolinWatchdog.Services.Pangolin;
 
 namespace PangolinWatchdog.Workers;
@@ -110,6 +111,12 @@ public class LogWatcherWorker : BackgroundService
         {
             foreach (var rule in rules)
             {
+                if(!rule.IsActive)
+                {
+                    // We can change active status during processing (if we exceed MaxPriority) so we double-check here
+                    continue;
+                }
+                
                 var isResourceMatch = await IsResourceMatch(db, rule, log, token);
                 if (!isResourceMatch) continue;
 
@@ -197,8 +204,26 @@ public class LogWatcherWorker : BackgroundService
             ExpiresAt = DateTime.Now.AddMinutes(duration)
         };
 
-        await pangolin.BanIpAsync(config, log.Ip, log.ResourceId, duration, ban.Reason);
-        
+        try
+        {
+            await pangolin.BanIpAsync(config, log.Ip, log.ResourceId, duration, ban.Reason, rule);
+        }
+        catch (MaxPriorityReachedException e)
+        {
+            // Disable the rule and add a new problem.
+            rule.IsActive = false;
+            var problem = new Problem
+            {
+                Description = e.Message,
+            };
+            db.Problems.Add(problem);
+            await db.SaveChangesAsync(token);
+            
+            _logger.LogError("{Message}", e.Message);
+            return;
+        }
+
+
         db.BannedIps.Add(ban);
         await db.SaveChangesAsync(token);
         

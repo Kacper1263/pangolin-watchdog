@@ -1,0 +1,98 @@
+@using Microsoft.EntityFrameworkCore
+@using PangolinWatchdog.Data
+@using MudBlazor
+@inject IServiceProvider ServiceProvider
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.h6">Problems</MudText>
+        <MudDivider Class="my-2" />
+
+        <MudTable Items="_problems" Dense="true" Style="background-color: #2c2c2c;">
+            <HeaderContent>
+                <MudTh>When</MudTh>
+                <MudTh>Description</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.DetectedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+                <MudTd>@context.Description</MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(async () => await DeleteProblem(context.Id))" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-4" Align="Align.Center">All good! :)</MudText>
+            </NoRecordsContent>
+        </MudTable>
+
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private List<Problem> _problems = new();
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProblems();
+        _cts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            while (!_cts.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(10000, _cts.Token);
+                    await InvokeAsync(LoadProblems);
+                }
+                catch (TaskCanceledException) { break; }
+                catch { /* ignore */ }
+            }
+        });
+    }
+
+    private async Task LoadProblems()
+    {
+        try
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            _problems = await db.Problems.OrderByDescending(p => p.DetectedAt).ToListAsync();
+            StateHasChanged();
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private async Task DeleteProblem(long id)
+    {
+        try
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var p = await db.Problems.FindAsync(id);
+            if (p != null)
+            {
+                db.Problems.Remove(p);
+                await db.SaveChangesAsync();
+                await LoadProblems();
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+
+    public void Dispose() => _cts?.Cancel();
+}

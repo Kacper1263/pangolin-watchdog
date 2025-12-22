@@ -275,11 +275,13 @@
             IsGlobal = rule.IsGlobal, 
             TargetResourceId = rule.TargetResourceId,
             BanDurationMinutes = rule.BanDurationMinutes,
-            IsActive = rule.IsActive
+            IsActive = rule.IsActive,
+            MaxPriority = rule.MaxPriority,
         };
 
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true};
         var parameters = new DialogParameters<PangolinWatchdog.Components.Dialogs.RuleDialog> { { x => x.Rule, ruleModel } };
-        var dialog = await DialogService.ShowAsync<PangolinWatchdog.Components.Dialogs.RuleDialog>(isNew ? "Add Rule" : "Edit Rule", parameters);
+        var dialog = await DialogService.ShowAsync<PangolinWatchdog.Components.Dialogs.RuleDialog>(isNew ? "Add Rule" : "Edit Rule", parameters, options);
         var result = await dialog.Result;
 
         if (!result.Canceled)
@@ -311,6 +313,7 @@
                 entity.TargetResourceId = savedRule.TargetResourceId;
                 entity.BanDurationMinutes = savedRule.BanDurationMinutes;
                 entity.IsActive = savedRule.IsActive;
+                entity.MaxPriority = savedRule.MaxPriority;
                 
                 Db.RuleResourceExclusions.RemoveRange(entity.ExcludedResources);
                 
