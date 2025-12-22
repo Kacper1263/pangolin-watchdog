@@ -24,9 +24,27 @@ A monitoring and security application that automatically protects your web resou
 
 1. **Log Monitoring**: The background worker continuously polls the Pangolin API for new access logs
 2. **Rule Evaluation**: Each log entry is evaluated against active watchdog rules
-3. **Automatic Banning**: When a log matches a rule, the IP is automatically banned via Pangolin API. Service is adding new block IP rule with **last + 1 priority (this is current limitation, it can not work for example if you have some allow country rules first - I'm working on it)**
+3. **Automatic Banning**: When a log matches a rule, the IP is automatically banned via Pangolin API. The service adds new block IP rules with **last + 1 priority** (see [Handling global allow rules](#handling-global-allow-rules) below)
 4. **Ban Tracking**: All bans are recorded in the local database with expiration times
 5. **Dashboard Updates**: The web dashboard displays real-time statistics and ban history
+
+## Handling global allow rules
+
+If you use global "allow" rules (for example an Allow Country X rule with a high priority), the default strategy of always creating new block rules at `last + 1` can conflict with those allows. To handle this, watchdog rules support an optional `MaxPriority` setting that limits where new block rules will be created.
+
+How it works
+
+- When `MaxPriority` is not set, the service creates new block rules at `last + 1` as before.
+- When `MaxPriority` is set for a watchdog rule, the service will attempt to fill any available priority gaps up to (but not exceeding) the configured `MaxPriority`. New bans will be created in the smallest available priorities greater than the current highest rule, but not beyond `MaxPriority`.
+
+Example
+
+- You have a global "allow" rule for country X at priority `100`.
+- You set `MaxPriority = 100` on a watchdog rule.
+- If existing resource rules end at priority `90`, new bans created by the watchdog will be added at `91`, `92`, ..., `99`.
+- When the next available slot would be `100` (equal to `MaxPriority`), the service will not add the blocking rule and will automatically disable the watchdog rule.
+
+This behavior lets you limit the impact of high-priority blocking rules and retain the precedence of global `allow` rules while still automatically adding bans into available gaps.
 
 ## Prerequisites
 

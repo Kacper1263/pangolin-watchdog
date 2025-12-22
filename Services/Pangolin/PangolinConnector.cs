@@ -1,5 +1,7 @@
-﻿using PangolinWatchdog.Data;
+﻿using System.Diagnostics;
+using PangolinWatchdog.Data;
 using PangolinWatchdog.DTO.Pangolin;
+using PangolinWatchdog.Helpers.Exceptions;
 
 namespace PangolinWatchdog.Services.Pangolin;
 
@@ -61,12 +63,20 @@ public class PangolinConnector
         }
     }
 
-    public async Task BanIpAsync(AppConfig config, string ip, long resourceId, int durationMinutes, string reason)
+    public async Task BanIpAsync(AppConfig config, string ip, long resourceId, int durationMinutes, string reason, WatchdogRule rule)
     {
         try 
         {
             // Get existing rules to find the next priority
-            var nextPriority = await GetNextPriorityAsync(config, resourceId);
+            var nextPriority = await GetNextPriorityAsync(config, resourceId, rule.MaxPriority);
+            
+            // Check if the nextPriority exceeds maxPriority. If so, we will disable the rule and add a new problem.
+            if(nextPriority >= rule.MaxPriority)
+            {
+                throw new MaxPriorityReachedException(
+                    $"Next priority {nextPriority} exceeds or equals MaxPriority {rule.MaxPriority.Value} for rule {rule.Name} (ID: {rule.Id}). " +
+                    $"Cannot ban IP {ip}. Rule has been disabled.");
+            }
 
             var ruleRequest = new PangolinCreateRuleRequest
             {
@@ -84,6 +94,9 @@ public class PangolinConnector
             AddAuthHeader(request, config);
             request.Content = JsonContent.Create(ruleRequest);
 
+            if(Debugger.IsAttached)
+                Debugger.Break();
+            
             var response = await _http.SendAsync(request);
             
             if (!response.IsSuccessStatusCode)
@@ -94,6 +107,10 @@ public class PangolinConnector
             }
 
             _logger.LogInformation("Successfully banned IP {Ip} on Resource {ResId} with Priority {Prio}", ip, resourceId, nextPriority);
+        }
+        catch (MaxPriorityReachedException)
+        {
+            throw; // Re-throw to be handled by caller
         }
         catch (Exception ex)
         {
@@ -176,13 +193,27 @@ public class PangolinConnector
         }
     }
 
-    private async Task<int> GetNextPriorityAsync(AppConfig config, long resourceId)
+    private async Task<long> GetNextPriorityAsync(AppConfig config, long resourceId, long? maxRulePriority)
     {
         var rules = await GetRulesAsync(config, resourceId);
         
         if (!rules.Any())
         {
             return 10;
+        }
+        
+        // If maxRulePriority is set, ensure we do not exceed it. We take numbers lower than maxRulePriority.
+        // We ignore everything equal or higher than maxRulePriority. Then we add 1 and if we are equal or higher than maxRulePriority,
+        // we disable the rule.
+        if (maxRulePriority.HasValue)
+        {
+            var filteredRules = rules.Where(r => r.Priority < maxRulePriority.Value).ToList();
+            if (filteredRules.Count == 0)
+            {
+                return 10;
+            }
+            var maxPriorityFiltered = filteredRules.Max(r => r.Priority);
+            return maxPriorityFiltered + 1;
         }
 
         var maxPriority = rules.Max(r => r.Priority);

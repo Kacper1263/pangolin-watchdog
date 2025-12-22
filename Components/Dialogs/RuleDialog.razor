@@ -32,6 +32,7 @@
                                       Label="Test String (e.g. /wp-admin/login.php)" 
                                       Variant="Variant.Filled" 
                                       Margin="Margin.Dense"
+                                      FullWidth="true"
                                       Immediate="true" />
                     </MudItem>
                     <MudItem xs="4" Class="d-flex align-center">
@@ -62,6 +63,7 @@
             <MudSelect T="long" Label="Excluded Resources (Optional)" 
                        @bind-SelectedValues="_selectedExclusions" 
                        MultiSelection="true"
+                       Class="my-4"
                        HelperText="Select resources to exclude from this global rule">
                 @foreach (var resource in _resources)
                 {
@@ -71,13 +73,39 @@
         }
         else
         {
-            <MudSelect T="long?" Label="Target Resource" @bind-Value="Rule.TargetResourceId" Required="true">
+            <MudSelect T="long?" Label="Target Resource" @bind-Value="Rule.TargetResourceId" Class="my-4" Required="true">
                 @foreach (var resource in _resources)
                 {
                     <MudSelectItem T="long?" Value="@resource.Id">@resource.Name</MudSelectItem>
                 }
             </MudSelect>
         }
+
+        <MudNumericField T="long?" Label="Max Priority (Optional)" 
+                         @bind-Value="Rule.MaxPriority" 
+                         Min="1" 
+                         Class="mt-4"
+                         HelperText="This rule will be disabled if a new block rule with higher priority is added" />
+
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
+            <MudText Typo="Typo.caption" Style="white-space:normal; max-width:420px;">Use this setting if you have global 'allow' rules</MudText>
+            <MudTooltip>
+                <ChildContent>
+                    <MudIcon Icon="@Icons.Material.Filled.HelpOutline" Size="Size.Small" Class="ml-2"/>
+                </ChildContent>
+                <TooltipContent>
+                    <MudText>Useful when you have global 'allow' rules and want to work after IP blocking rules</MudText>
+                    <MudText Class="mt-2">
+                        For example, if you have a global 'allow' rule for country X with priority 100, and you set this rule's Max Priority to 100,
+                    </MudText>
+                    <MudText>new blocking rules will be added before the 100 priority 'allow' rule, ensuring they are evaluated first.</MudText>
+                    <MudText>If you reach the Max Priority limit, this rule will be automatically disabled.</MudText>
+                </TooltipContent>
+            </MudTooltip>
+
+        </MudStack>
+
+        <MudDivider Class="my-4"/>
 
         <MudSwitch T="bool" Label="Active" Color="Color.Success" @bind-Value="Rule.IsActive" />
 

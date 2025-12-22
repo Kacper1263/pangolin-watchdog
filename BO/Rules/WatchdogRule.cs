@@ -29,4 +29,10 @@ public class WatchdogRule
     public int? BanDurationMinutes { get; set; } = 60;
     
     public bool IsActive { get; set; } = true;
+    
+    /// <summary>
+    /// Used to allow declaring rules with higher priority (e.g., allow country) but still banning IPs by giving them lower (number) priority.
+    /// If the next priority is equal or higher than MaxPriority, we will disable this rule.
+    /// </summary>
+    public long? MaxPriority { get; set; }
 }

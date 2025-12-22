@@ -44,7 +44,7 @@ public class PangolinOrgEntry
     public string? UtilitySubnet { get; set; }
 
     [JsonPropertyName("createdAt")]
-    public DateTime CreatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
 }
 
 public class PangolinPagination
