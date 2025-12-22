@@ -288,45 +288,54 @@
         {
             var savedRule = (WatchdogRule)result.Data;
 
-            if (isNew)
+            try
             {
-                Db.Rules.Add(savedRule);
-                Db.SaveChanges();
-                
-                if (savedRule.ExcludedResources.Any())
+                if (isNew)
                 {
-                    foreach (var exclusion in savedRule.ExcludedResources)
+                    Db.Rules.Add(savedRule);
+                    Db.SaveChanges();
+
+                    if (savedRule.ExcludedResources.Any())
                     {
-                        exclusion.RuleId = savedRule.Id;
-                        Db.RuleResourceExclusions.Add(exclusion);
+                        foreach (var exclusion in savedRule.ExcludedResources)
+                        {
+                            exclusion.RuleId = savedRule.Id;
+                            Db.RuleResourceExclusions.Add(exclusion);
+                        }
+
+                        Db.SaveChanges();
                     }
+                }
+                else
+                {
+                    var entity = Db.Rules.Include(r => r.ExcludedResources).First(r => r.Id == savedRule.Id);
+                    entity.Name = savedRule.Name;
+                    entity.Pattern = savedRule.Pattern;
+                    entity.UseRegex = savedRule.UseRegex;
+                    entity.IsGlobal = savedRule.IsGlobal;
+                    entity.TargetResourceId = savedRule.TargetResourceId;
+                    entity.BanDurationMinutes = savedRule.BanDurationMinutes;
+                    entity.IsActive = savedRule.IsActive;
+                    entity.MaxPriority = savedRule.MaxPriority;
+
+                    Db.RuleResourceExclusions.RemoveRange(entity.ExcludedResources);
+
+                    if (savedRule.ExcludedResources.Any())
+                    {
+                        foreach (var exclusion in savedRule.ExcludedResources)
+                        {
+                            exclusion.RuleId = entity.Id;
+                            Db.RuleResourceExclusions.Add(exclusion);
+                        }
+                    }
+
                     Db.SaveChanges();
                 }
             }
-            else
+            catch (Exception e)
             {
-                var entity = Db.Rules.Include(r => r.ExcludedResources).First(r => r.Id == savedRule.Id);
-                entity.Name = savedRule.Name;
-                entity.Pattern = savedRule.Pattern;
-                entity.UseRegex = savedRule.UseRegex;
-                entity.IsGlobal = savedRule.IsGlobal;
-                entity.TargetResourceId = savedRule.TargetResourceId;
-                entity.BanDurationMinutes = savedRule.BanDurationMinutes;
-                entity.IsActive = savedRule.IsActive;
-                entity.MaxPriority = savedRule.MaxPriority;
-                
-                Db.RuleResourceExclusions.RemoveRange(entity.ExcludedResources);
-                
-                if (savedRule.ExcludedResources.Any())
-                {
-                    foreach (var exclusion in savedRule.ExcludedResources)
-                    {
-                        exclusion.RuleId = entity.Id;
-                        Db.RuleResourceExclusions.Add(exclusion);
-                    }
-                }
-                
-                Db.SaveChanges();
+                Snackbar.Add($"Failed to save rule: {e.Message}", Severity.Error);
+                throw;
             }
 
             _rules = Db.Rules
