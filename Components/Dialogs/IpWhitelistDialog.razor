@@ -1,0 +1,322 @@
+@using Microsoft.EntityFrameworkCore
+@using PangolinWatchdog.BO
+@using System.Threading
+@inject IServiceProvider ServiceProvider
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.h6">IP Whitelist</MudText>
+        <MudText Typo="Typo.body2">Add your trusted IP addresses here to prevent them from being checked against security rules.</MudText>
+        <MudDivider Class="my-2" />
+        
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+            <div style="flex: 0 0 30%; max-width: 30%; min-width: 0;">
+                <MudTextField @bind-Value="_newIp" Label="IP address" Variant="Variant.Text" Immediate="true" Style="width:100%;" />
+            </div>
+            <div style="flex: 1 1 auto; min-width: 0;">
+                <MudTextField @bind-Value="_newName" Label="Name (optional)" Variant="Variant.Text" Immediate="true" Style="width:100%;" />
+            </div>
+            <div style="flex: 0 0 auto;">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddIp" Disabled="@string.IsNullOrWhiteSpace(_newIp)" Size="Size.Medium" Class="mt-0">Add</MudButton>
+            </div>
+        </MudStack>
+
+        <!-- Filter placed in the IP column header, triggers server reload -->
+        <MudTable T="GlobalWhitelistedIp" ServerData="@ServerReload" Style="background-color: #2c2c2c;"
+                  CanCancelEdit="true" CommitEditTooltip="Save" CancelEditTooltip="Cancel" RowEditCommit="OnRowEditCommit" RowEditCancel="OnRowEditCancel" @ref="_tableRef">
+
+            <ColGroup>
+                <col style="width:30%;" />
+                <col style="width:60%;" />  
+                <col style="width:10%;" /> 
+            </ColGroup>
+
+            <HeaderContent>
+                <MudTh>
+                    <MudTableSortLabel SortLabel="IpAddress" T="GlobalWhitelistedIp">IP</MudTableSortLabel>
+                    <MudTextField @bind-Value="_filter" Placeholder="Filter by IP" Immediate="true" @bind-Value:after="OnFilterChanged" Clearable="true" />
+                </MudTh>
+                <MudTh>Name</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="IP">@context.IpAddress</MudTd>
+                <MudTd DataLabel="Name">@context.Name</MudTd>
+                <MudTd Style="text-align:right;">
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Class="pa-0" OnClick="@(async () => await BeginEdit(context))" />
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Class="pa-0 ml-1" OnClick="@(async () => await DeleteIp(context.Id))" />
+                </MudTd>
+            </RowTemplate>
+
+            <RowEditingTemplate>
+                <MudTd DataLabel="IP">
+                    <MudTextField @bind-Value="context.IpAddress" Required Variant="Variant.Outlined" Dense="true" Immediate="true" Style="height:40px;" />
+                </MudTd>
+                <MudTd DataLabel="Name">
+                    <MudTextField @bind-Value="context.Name" Variant="Variant.Outlined" Dense="true" Immediate="true" Style="height:40px;" />
+                </MudTd>
+            </RowEditingTemplate>
+
+            <NoRecordsContent>
+                <MudText Class="pa-4" Align="Align.Center">No whitelisted IPs.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private List<GlobalWhitelistedIp> _globalWhitelistedIps = new();
+    private MudTable<GlobalWhitelistedIp>? _tableRef;
+
+    // Track the Id of the row currently in inline edit mode.
+    // Using Id comparison is more robust than object reference equality when reloading data.
+    private long? _editingItemId;
+
+    // New input fields for adding an IP
+    private string _newIp = string.Empty;
+    private string _newName = string.Empty;
+
+    // Filter field (single text filter applied to IpAddress and Name)
+    private string _filter = string.Empty;
+
+    // Keep existing initial loader for backward compatibility (not used by ServerData directly)
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGlobalWhitelistedIps();
+    }
+
+    // Load items from the database (kept for compatibility)
+    private async Task LoadGlobalWhitelistedIps()
+    {
+        try
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            _globalWhitelistedIps = await db.GlobalWhitelistedIps.OrderBy(p => p.Id).ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load whitelisted IPs. {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Called after filter input changes to reload server data
+    private async Task OnFilterChanged()
+    {
+        if (_tableRef is not null)
+            await _tableRef.ReloadServerData();
+    }
+
+    // ServerData callback for MudTable - applies filter, paging, and returns TableData
+    private async Task<TableData<GlobalWhitelistedIp>> ServerReload(TableState state, CancellationToken token)
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var query = db.GlobalWhitelistedIps.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(_filter))
+        {
+            var escaped = EscapeLikeValue(_filter);
+            query = query.Where(x => EF.Functions.Like(x.IpAddress, $"%{escaped}%") || EF.Functions.Like(x.Name, $"%{escaped}%"));
+        }
+
+        // Apply sorting if needed (support basic IpAddress sort)
+        query = state.SortLabel switch
+        {
+            "IpAddress" => state.SortDirection == SortDirection.Ascending ? query.OrderBy(o => o.IpAddress) : query.OrderByDescending(o => o.IpAddress),
+            "Name" => state.SortDirection == SortDirection.Ascending ? query.OrderBy(o => o.Name) : query.OrderByDescending(o => o.Name),
+            _ => query.OrderBy(o => o.Id)
+        };
+
+        var total = await query.CountAsync(token);
+        var items = await query.Skip(state.Page * state.PageSize).Take(state.PageSize).ToListAsync(token);
+
+        return new TableData<GlobalWhitelistedIp> { TotalItems = total, Items = items };
+    }
+
+    private static string EscapeLikeValue(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        return value.Replace("[", "[[").Replace("%", "[%]").Replace("_", "[_]");
+    }
+
+    // Add new IP to database
+    private async Task AddIp()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_newIp))
+            {
+                Snackbar.Add("IP address is required.", Severity.Warning);
+                return;
+            }
+
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            // Check duplicate IP
+            var exists = await db.GlobalWhitelistedIps.AnyAsync(x => x.IpAddress == _newIp);
+            if (exists)
+            {
+                Snackbar.Add("IP already whitelisted.", Severity.Warning);
+                return;
+            }
+
+            var entity = new GlobalWhitelistedIp { IpAddress = _newIp, Name = _newName };
+            db.GlobalWhitelistedIps.Add(entity);
+            await db.SaveChangesAsync();
+
+            Snackbar.Add("Whitelist entry added.", Severity.Success);
+
+            // Clear inputs and refresh list
+            _newIp = string.Empty;
+            _newName = string.Empty;
+            if (_tableRef is not null) await _tableRef.ReloadServerData();
+            else await LoadGlobalWhitelistedIps();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to add IP. {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Begin inline editing for given row
+    private Task BeginEdit(GlobalWhitelistedIp item)
+    {
+        try
+        {
+            // Track id and use table's SetEditingItem to enter inline edit mode
+            _editingItemId = item.Id;
+            _tableRef?.SetEditingItem(item);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to start editing. {ex.Message}", Severity.Error);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // Save changes for edited row to database
+    private async Task SaveEdit(GlobalWhitelistedIp edited)
+    {
+        // 'edited' is provided by the table row. Save its current values to the DB.
+        try
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var existing = await db.GlobalWhitelistedIps.FindAsync(edited.Id);
+            if (existing != null)
+            {
+                // Update allowed fields
+                existing.IpAddress = edited.IpAddress;
+                existing.Name = edited.Name;
+
+                db.GlobalWhitelistedIps.Update(existing);
+                await db.SaveChangesAsync();
+                Snackbar.Add("Whitelist entry saved.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Whitelist entry not found.", Severity.Warning);
+            }
+
+            // Clear editing state and reload the list
+            _editingItemId = null;
+            _tableRef?.SetEditingItem(null);
+            if (_tableRef is not null) await _tableRef.ReloadServerData();
+            else await LoadGlobalWhitelistedIps();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save whitelist entry. {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Cancel edit - discard any local changes by reloading list
+    private async Task CancelEdit()
+    {
+        try
+        {
+            // Clear editing state and reload original data from DB
+            _editingItemId = null;
+            _tableRef?.SetEditingItem(null);
+            if (_tableRef is not null) await _tableRef.ReloadServerData();
+            else await LoadGlobalWhitelistedIps();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to cancel edit. {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Delete with confirmation dialog
+    private async Task DeleteIp(long id)
+    {
+        try
+        {
+            var confirm = await DialogService.ShowMessageBox(
+                "Confirm delete",
+                "Are you sure you want to delete this whitelisted IP?",
+                yesText: "Delete",
+                noText: "Cancel");
+
+            if (confirm != true)
+                return;
+
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var p = await db.GlobalWhitelistedIps.FindAsync(id);
+            if (p != null)
+            {
+                db.GlobalWhitelistedIps.Remove(p);
+                await db.SaveChangesAsync();
+
+                // If deleted row was in edit mode, clear editing state
+                if (_editingItemId == id)
+                {
+                    _editingItemId = null;
+                    _tableRef?.SetEditingItem(null);
+                }
+
+                if (_tableRef is not null) await _tableRef.ReloadServerData();
+                else await LoadGlobalWhitelistedIps();
+                Snackbar.Add("Whitelist entry deleted.", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to delete whitelisted IP. {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Handlers for MudTable's RowEditCommit and RowEditCancel events.
+    // Razor expects object? parameter signatures for these callbacks, we safely cast.
+    private void OnRowEditCommit(object? args)
+    {
+        if (args is GlobalWhitelistedIp ta)
+        {
+            _ = SaveEdit(ta);
+        }
+    }
+
+    private void OnRowEditCancel(object? args)
+    {
+        // When the table built-in cancel is used, discard changes by reloading from DB
+        _ = CancelEdit();
+    }
+
+    private void Close() => MudDialog.Close();
+}
