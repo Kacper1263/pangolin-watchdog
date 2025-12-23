@@ -1,9 +1,10 @@
 @using Microsoft.EntityFrameworkCore
 @using PangolinWatchdog.BO
 @using System.Threading
-@inject IServiceProvider ServiceProvider
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@rendermode InteractiveServer
 
 <MudDialog>
     <DialogContent>
@@ -11,21 +12,21 @@
         <MudText Typo="Typo.body2">Add your trusted IP addresses here to prevent them from being checked against security rules.</MudText>
         <MudDivider Class="my-2" />
         
-        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="my-6">
             <div style="flex: 0 0 30%; max-width: 30%; min-width: 0;">
                 <MudTextField @bind-Value="_newIp" Label="IP address" Variant="Variant.Text" Immediate="true" Style="width:100%;" />
             </div>
             <div style="flex: 1 1 auto; min-width: 0;">
                 <MudTextField @bind-Value="_newName" Label="Name (optional)" Variant="Variant.Text" Immediate="true" Style="width:100%;" />
             </div>
-            <div style="flex: 0 0 auto;">
+            <div style="flex: 0 0 auto; display:flex; gap:8px;">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddIp" Disabled="@string.IsNullOrWhiteSpace(_newIp)" Size="Size.Medium" Class="mt-0">Add</MudButton>
             </div>
         </MudStack>
 
-        <!-- Filter placed in the IP column header, triggers server reload -->
         <MudTable T="GlobalWhitelistedIp" ServerData="@ServerReload" Style="background-color: #2c2c2c;"
-                  CanCancelEdit="true" CommitEditTooltip="Save" CancelEditTooltip="Cancel" RowEditCommit="OnRowEditCommit" RowEditCancel="OnRowEditCancel" @ref="_tableRef">
+              CanCancelEdit="true" CommitEditTooltip="Save" CancelEditTooltip="Cancel" RowEditCommit="OnRowEditCommit" RowEditCancel="OnRowEditCancel" @ref="_tableRef"
+              RowsPerPageOptions="new int[]{10,25,50,100}" Height="65vh">
 
             <ColGroup>
                 <col style="width:30%;" />
@@ -36,9 +37,12 @@
             <HeaderContent>
                 <MudTh>
                     <MudTableSortLabel SortLabel="IpAddress" T="GlobalWhitelistedIp">IP</MudTableSortLabel>
-                    <MudTextField @bind-Value="_filter" Placeholder="Filter by IP" Immediate="true" @bind-Value:after="OnFilterChanged" Clearable="true" />
+                    <MudTextField @bind-Value="_filterIp" Placeholder="Filter by IP" Immediate="true" @bind-Value:after="OnFilterChanged" Clearable="true" />
                 </MudTh>
-                <MudTh>Name</MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortLabel="Name" T="GlobalWhitelistedIp">Name</MudTableSortLabel>
+                    <MudTextField @bind-Value="_filterName" Placeholder="Filter by Name" Immediate="true" @bind-Value:after="OnFilterChanged" Clearable="true" />
+                </MudTh>
                 <MudTh></MudTh>
             </HeaderContent>
 
@@ -46,8 +50,8 @@
                 <MudTd DataLabel="IP">@context.IpAddress</MudTd>
                 <MudTd DataLabel="Name">@context.Name</MudTd>
                 <MudTd Style="text-align:right;">
-                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Class="pa-0" OnClick="@(async () => await BeginEdit(context))" />
-                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Class="pa-0 ml-1" OnClick="@(async () => await DeleteIp(context.Id))" />
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Class="pa-0" OnClick="@(() => BeginEdit(context))" />
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Class="pa-0 ml-1" OnClick="@(() => DeleteIp(context.Id))" />
                 </MudTd>
             </RowTemplate>
 
@@ -63,8 +67,10 @@
             <NoRecordsContent>
                 <MudText Class="pa-4" Align="Align.Center">No whitelisted IPs.</MudText>
             </NoRecordsContent>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new []{10,25,50,100}" />
+            </PagerContent>
         </MudTable>
-
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Close">Close</MudButton>
@@ -74,64 +80,42 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
 
-    private List<GlobalWhitelistedIp> _globalWhitelistedIps = new();
     private MudTable<GlobalWhitelistedIp>? _tableRef;
-
-    // Track the Id of the row currently in inline edit mode.
-    // Using Id comparison is more robust than object reference equality when reloading data.
     private long? _editingItemId;
-
-    // New input fields for adding an IP
+    
+    // Input fields for adding an IP
     private string _newIp = string.Empty;
     private string _newName = string.Empty;
 
-    // Filter field (single text filter applied to IpAddress and Name)
-    private string _filter = string.Empty;
+    // Filter fields for IP and Name columns
+    private string _filterIp = string.Empty;
+    private string _filterName = string.Empty;
 
-    // Keep existing initial loader for backward compatibility (not used by ServerData directly)
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadGlobalWhitelistedIps();
-    }
-
-    // Load items from the database (kept for compatibility)
-    private async Task LoadGlobalWhitelistedIps()
-    {
-        try
-        {
-            using var scope = ServiceProvider.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            _globalWhitelistedIps = await db.GlobalWhitelistedIps.OrderBy(p => p.Id).ToListAsync();
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to load whitelisted IPs. {ex.Message}", Severity.Error);
-        }
-    }
-
-    // Called after filter input changes to reload server data
+    // Called after any filter input changes to reload server data
     private async Task OnFilterChanged()
     {
         if (_tableRef is not null)
             await _tableRef.ReloadServerData();
     }
 
-    // ServerData callback for MudTable - applies filter, paging, and returns TableData
+    // ServerData callback for MudTable - applies filters, paging, and returns TableData
     private async Task<TableData<GlobalWhitelistedIp>> ServerReload(TableState state, CancellationToken token)
     {
-        using var scope = ServiceProvider.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
+        await using var db = await DbFactory.CreateDbContextAsync(token);
         var query = db.GlobalWhitelistedIps.AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(_filter))
+        if (!string.IsNullOrWhiteSpace(_filterIp))
         {
-            var escaped = EscapeLikeValue(_filter);
-            query = query.Where(x => EF.Functions.Like(x.IpAddress, $"%{escaped}%") || EF.Functions.Like(x.Name, $"%{escaped}%"));
+            var escaped = EscapeLikeValue(_filterIp);
+            query = query.Where(x => EF.Functions.Like(x.IpAddress, $"%{escaped}%"));
+        }
+        if (!string.IsNullOrWhiteSpace(_filterName))
+        {
+            var escapedName = EscapeLikeValue(_filterName);
+            query = query.Where(x => EF.Functions.Like(x.Name, $"%{escapedName}%"));
         }
 
-        // Apply sorting if needed (support basic IpAddress sort)
+        // Apply sorting if needed (support basic IpAddress and Name sort)
         query = state.SortLabel switch
         {
             "IpAddress" => state.SortDirection == SortDirection.Ascending ? query.OrderBy(o => o.IpAddress) : query.OrderByDescending(o => o.IpAddress),
@@ -140,7 +124,13 @@
         };
 
         var total = await query.CountAsync(token);
-        var items = await query.Skip(state.Page * state.PageSize).Take(state.PageSize).ToListAsync(token);
+        
+        // Use the current page and page size from table state
+        var page = Math.Max(0, state.Page);
+        var pageSize = Math.Max(1, state.PageSize);
+        var skip = page * pageSize;
+
+        var items = await query.Skip(skip).Take(pageSize).ToListAsync(token);
 
         return new TableData<GlobalWhitelistedIp> { TotalItems = total, Items = items };
     }
@@ -162,8 +152,7 @@
                 return;
             }
 
-            using var scope = ServiceProvider.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var db = await DbFactory.CreateDbContextAsync();
 
             // Check duplicate IP
             var exists = await db.GlobalWhitelistedIps.AnyAsync(x => x.IpAddress == _newIp);
@@ -183,7 +172,6 @@
             _newIp = string.Empty;
             _newName = string.Empty;
             if (_tableRef is not null) await _tableRef.ReloadServerData();
-            else await LoadGlobalWhitelistedIps();
         }
         catch (Exception ex)
         {
@@ -192,7 +180,7 @@
     }
 
     // Begin inline editing for given row
-    private Task BeginEdit(GlobalWhitelistedIp item)
+    private void BeginEdit(GlobalWhitelistedIp item)
     {
         try
         {
@@ -204,8 +192,6 @@
         {
             Snackbar.Add($"Failed to start editing. {ex.Message}", Severity.Error);
         }
-
-        return Task.CompletedTask;
     }
 
     // Save changes for edited row to database
@@ -214,8 +200,7 @@
         // 'edited' is provided by the table row. Save its current values to the DB.
         try
         {
-            using var scope = ServiceProvider.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var db = await DbFactory.CreateDbContextAsync();
 
             var existing = await db.GlobalWhitelistedIps.FindAsync(edited.Id);
             if (existing != null)
@@ -233,11 +218,9 @@
                 Snackbar.Add("Whitelist entry not found.", Severity.Warning);
             }
 
-            // Clear editing state and reload the list
+            // Clear editing state - table will refresh automatically via ServerData
             _editingItemId = null;
             _tableRef?.SetEditingItem(null);
-            if (_tableRef is not null) await _tableRef.ReloadServerData();
-            else await LoadGlobalWhitelistedIps();
         }
         catch (Exception ex)
         {
@@ -245,21 +228,12 @@
         }
     }
 
-    // Cancel edit - discard any local changes by reloading list
-    private async Task CancelEdit()
+    // Cancel edit - discard any local changes
+    private void CancelEdit()
     {
-        try
-        {
-            // Clear editing state and reload original data from DB
-            _editingItemId = null;
-            _tableRef?.SetEditingItem(null);
-            if (_tableRef is not null) await _tableRef.ReloadServerData();
-            else await LoadGlobalWhitelistedIps();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to cancel edit. {ex.Message}", Severity.Error);
-        }
+        // Clear editing state - no need to reload, just exit edit mode
+        _editingItemId = null;
+        _tableRef?.SetEditingItem(null);
     }
 
     // Delete with confirmation dialog
@@ -276,8 +250,7 @@
             if (confirm != true)
                 return;
 
-            using var scope = ServiceProvider.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var db = await DbFactory.CreateDbContextAsync();
             var p = await db.GlobalWhitelistedIps.FindAsync(id);
             if (p != null)
             {
@@ -291,9 +264,9 @@
                     _tableRef?.SetEditingItem(null);
                 }
 
-                if (_tableRef is not null) await _tableRef.ReloadServerData();
-                else await LoadGlobalWhitelistedIps();
                 Snackbar.Add("Whitelist entry deleted.", Severity.Success);
+                // Force table refresh after deletion
+                if (_tableRef is not null) await _tableRef.ReloadServerData();
             }
         }
         catch (Exception ex)
@@ -314,8 +287,8 @@
 
     private void OnRowEditCancel(object? args)
     {
-        // When the table built-in cancel is used, discard changes by reloading from DB
-        _ = CancelEdit();
+        // When the table built-in cancel is used, discard changes
+        CancelEdit();
     }
 
     private void Close() => MudDialog.Close();
