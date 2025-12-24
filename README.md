@@ -104,9 +104,9 @@ docker run -d \
   -v ./data:/app/data \
   -e ADMIN_PASSWORD=watchdogadmin \
   -e TZ=Europe/Warsaw \
-  kacper1263/pangolin-watchdog:v1.0.2
+  kacper1263/pangolin-watchdog:v1.2.1
 ```
-> change v1.0.2 to current version
+> change v1.2.1 to current version
 
 ## Configuration
 
@@ -142,7 +142,7 @@ Rules define which access patterns should trigger automatic IP bans.
 
 ## How to update
 
-**‼️ Always backup your `data/watchdog.db` file before updating ‼️**
+**‼️ Always backup your `data` folder before updating. First stop docker container and after that backup your folder ‼️**
 
 If you are using docker compose, just bump version number and use `docker compose up -d` (docker will automaticly pull new image and recreate your container)
 

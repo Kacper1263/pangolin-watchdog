@@ -162,7 +162,7 @@
                 return;
             }
 
-            var entity = new GlobalWhitelistedIp { IpAddress = _newIp, Name = _newName };
+            var entity = new GlobalWhitelistedIp { IpAddress = _newIp.Trim(), Name = _newName };
             db.GlobalWhitelistedIps.Add(entity);
             await db.SaveChangesAsync();
 
@@ -198,6 +198,13 @@
     private async Task SaveEdit(GlobalWhitelistedIp edited)
     {
         // 'edited' is provided by the table row. Save its current values to the DB.
+        
+        if(string.IsNullOrWhiteSpace(edited.IpAddress))
+        {
+            Snackbar.Add("IP address is required.", Severity.Warning);
+            return;
+        }
+        
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
