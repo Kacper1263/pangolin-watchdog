@@ -63,7 +63,7 @@ public class PangolinConnector
         }
     }
 
-    public async Task BanIpAsync(AppConfig config, string ip, long resourceId, int durationMinutes, string reason, WatchdogRule rule)
+    public async Task BanIpAsync(AppConfig config, string ip, long resourceId, WatchdogRule rule)
     {
         try 
         {
@@ -74,8 +74,8 @@ public class PangolinConnector
             if(nextPriority >= rule.MaxPriority)
             {
                 throw new MaxPriorityReachedException(
-                    $"Next priority {nextPriority} exceeds or equals MaxPriority {rule.MaxPriority.Value} for rule \"{rule.Name}\" (ID: {rule.Id}). " +
-                    $"Cannot ban IP {ip}. Rule has been disabled.");
+                    $"Next priority exceeds or equals MaxPriority {rule.MaxPriority.Value} for rule \"{rule.Name}\" (ID: {rule.Id}). " +
+                    $"Cannot ban IP {ip} on resource  \"{rule.TargetResource?.Name ?? "N/A"}\". Rule has been disabled.");
             }
 
             var ruleRequest = new PangolinCreateRuleRequest

@@ -103,12 +103,24 @@ public class LogWatcherWorker : BackgroundService
             .Where(r => r.IsActive)
             .ToListAsync(token);
         
+        var globalyWhitelistedIps = await db.GlobalWhitelistedIps
+            .Select(w => w.IpAddress)
+            .ToListAsync(token);
+        
         var regexCache = new Dictionary<long, Regex>();
 
         var maxProcessedId = config.LastProcessedLogId;
 
         foreach (var log in newLogs)
         {
+            // we will check for whitelisted IPs here, so we can increment LastProcessedLogId
+            if (globalyWhitelistedIps.Contains(log.Ip))
+            {
+                _logger.LogDebug("Skipping log Id {LogId} from whitelisted IP {Ip}", log.Id, log.Ip);
+                if (log.Id > maxProcessedId) maxProcessedId = log.Id;
+                continue;
+            }
+
             foreach (var rule in rules)
             {
                 if(!rule.IsActive)
@@ -206,7 +218,7 @@ public class LogWatcherWorker : BackgroundService
 
         try
         {
-            await pangolin.BanIpAsync(config, log.Ip, log.ResourceId, duration, ban.Reason, rule);
+            await pangolin.BanIpAsync(config, log.Ip, log.ResourceId, rule);
         }
         catch (MaxPriorityReachedException e)
         {

@@ -1,4 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using PangolinWatchdog.BO;
+
 namespace PangolinWatchdog.Data;
 
 
@@ -10,4 +12,5 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Resource> Resources { get; set; }
     public DbSet<RuleResourceExclusion> RuleResourceExclusions { get; set; }
     public DbSet<Problem> Problems { get; set; }
+    public DbSet<GlobalWhitelistedIp> GlobalWhitelistedIps { get; set; }
 }
