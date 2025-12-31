@@ -249,7 +249,7 @@
                 }
             }
             
-            Db.SaveChanges();
+            await Db.SaveChangesAsync();
             Snackbar.Add($"Resources refreshed! Synced {resources.Count} resources.", Severity.Success);
         }
         catch (Exception ex)

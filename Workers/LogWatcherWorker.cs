@@ -218,7 +218,7 @@ public class LogWatcherWorker : BackgroundService
 
         try
         {
-            await pangolin.BanIpAsync(config, log.Ip, log.ResourceId, rule);
+            await pangolin.BanIpAsync(config, log.Ip, log.ResourceId, rule, resource.Name);
         }
         catch (MaxPriorityReachedException e)
         {
