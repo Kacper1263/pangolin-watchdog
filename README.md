@@ -80,7 +80,7 @@ The application is available as a pre-built Docker image on Docker Hub: https://
 
 ### 1. Create docker-compose.yml
 
-Download current `docker-compose.yml` file and change env variables
+Download current `compose.yaml` file and change env variables (make sure to set latest image version)
 
 ### 2. Start the Service
 
@@ -104,7 +104,7 @@ docker run -d \
   -v ./data:/app/data \
   -e ADMIN_PASSWORD=watchdogadmin \
   -e TZ=Europe/Warsaw \
-  kacper1263/pangolin-watchdog:v1.2.1
+  kacper1263/pangolin-watchdog:v1.2.2
 ```
 > change v1.2.1 to current version
 
