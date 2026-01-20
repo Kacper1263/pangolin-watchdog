@@ -2,9 +2,12 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using PangolinWatchdog.Data
+@using PangolinWatchdog.Services.Pangolin
 @attribute [Authorize]
 @implements IDisposable 
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject PangolinConnector PangolinConnector
+@inject ISnackbar Snackbar
 @rendermode InteractiveServer
 
 <PageTitle>Dashboard</PageTitle>
@@ -76,6 +79,7 @@
             </MudStack>
         </MudTh>
         <MudTh>Status</MudTh>
+        <MudTh Style="width: 50px;">Actions</MudTh>
     </HeaderContent>
     <RowTemplate Context="ban">
         <MudTd DataLabel="IP">
@@ -97,6 +101,18 @@
                  <MudIcon Icon="@Icons.Material.Filled.LockOpen" Color="Color.Success" Title="Expired" Size="Size.Small"/>
             }
         </MudTd>
+        <MudTd DataLabel="Actions">
+            @if (ban.ExpiresAt == null || ban.ExpiresAt > DateTime.Now)
+            {
+                <MudTooltip Text="Remove ban and unblock IP in Pangolin">
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteForever" 
+                                   Color="Color.Error" 
+                                   Size="Size.Small" 
+                                   OnClick="@(() => RemoveBanAsync(ban))"
+                                   Disabled="@_isRemoving" />
+                </MudTooltip>
+            }
+        </MudTd>
     </RowTemplate>
     <NoRecordsContent>
         <MudText Class="pa-4" Align="Align.Center">Database is empty.</MudText>
@@ -111,6 +127,7 @@
     private int _activeBansCount = 0;
     private long _lastLogId = 0;
     private int _autoRefreshTimerSeconds = 5;
+    private bool _isRemoving = false;
 
     private PeriodicTimer? _timer;
     private readonly CancellationTokenSource _cts = new();
@@ -291,5 +308,81 @@
         return value.Replace("[", "[[")
                     .Replace("%", "[%]")
                     .Replace("_", "[_]");
+    }
+
+    private async Task RemoveBanAsync(BannedIp ban)
+    {
+        _isRemoving = true;
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            
+            var config = await db.Configurations.FirstOrDefaultAsync();
+            if (config == null)
+            {
+                Snackbar.Add("Configuration not found", Severity.Error);
+                return;
+            }
+
+            // Get the ban from the new context to avoid tracking issues
+            var banToRemove = await db.BannedIps
+                .Include(b => b.Resource)
+                .FirstOrDefaultAsync(b => b.Id == ban.Id);
+            
+            if (banToRemove == null)
+            {
+                Snackbar.Add("Ban not found in database", Severity.Error);
+                return;
+            }
+
+            // Get rules from Pangolin API
+            var rules = await PangolinConnector.GetRulesAsync(config, banToRemove.Resource.PangolinResourceId);
+            
+            // Find matching rule for this IP
+            var matchingRule = rules.FirstOrDefault(r => 
+                r.Match.Equals("IP", StringComparison.OrdinalIgnoreCase) && 
+                r.Value.Equals(banToRemove.IpAddress, StringComparison.OrdinalIgnoreCase));
+
+            if (matchingRule != null)
+            {
+                // Delete rule from Pangolin API
+                var deleted = await PangolinConnector.DeleteRuleAsync(config, banToRemove.Resource.PangolinResourceId, matchingRule.RuleId);
+                
+                if (deleted)
+                {
+                    // Remove ban from local database
+                    db.BannedIps.Remove(banToRemove);
+                    await db.SaveChangesAsync();
+                    
+                    Snackbar.Add($"Ban removed for IP {banToRemove.IpAddress}", Severity.Success);
+                    
+                    // Reload table
+                    await _table.ReloadServerData();
+                }
+                else
+                {
+                    Snackbar.Add($"Failed to delete rule from Pangolin API", Severity.Error);
+                }
+            }
+            else
+            {
+                // Rule not found in Pangolin, remove from local DB only
+                db.BannedIps.Remove(banToRemove);
+                await db.SaveChangesAsync();
+                
+                Snackbar.Add($"Rule not found in Pangolin, removed from local DB only", Severity.Warning);
+                
+                // Reload table
+                await _table.ReloadServerData();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error removing ban: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isRemoving = false;
+        }
     }
 }
