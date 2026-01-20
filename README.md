@@ -104,9 +104,9 @@ docker run -d \
   -v ./data:/app/data \
   -e ADMIN_PASSWORD=watchdogadmin \
   -e TZ=Europe/Warsaw \
-  kacper1263/pangolin-watchdog:v1.2.2
+  kacper1263/pangolin-watchdog:v1.3.0
 ```
-> change v1.2.1 to current version
+> change v1.3.0 to current version
 
 ## Configuration
 
