@@ -81,25 +81,32 @@
             </MudSelect>
         }
 
+        <MudNumericField T="long?" Label="Min Priority (Optional)" 
+                         @bind-Value="Rule.MinPriority" 
+                         Min="1" 
+                         Class="mt-4"
+                         HelperText="Starting priority for this rule's ban entries" />
+
         <MudNumericField T="long?" Label="Max Priority (Optional)" 
                          @bind-Value="Rule.MaxPriority" 
                          Min="1" 
-                         Class="mt-4"
+                         Class="mt-2"
                          HelperText="This rule will be disabled if a new block rule with higher priority is added" />
 
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
-            <MudText Typo="Typo.caption" Style="white-space:normal; max-width:420px;">Use this setting if you have global 'allow' rules</MudText>
+            <MudText Typo="Typo.caption" Style="white-space:normal; max-width:420px;">Use Min/Max settings if you have global 'allow' rules</MudText>
             <MudTooltip>
                 <ChildContent>
                     <MudIcon Icon="@Icons.Material.Filled.HelpOutline" Size="Size.Small" Class="ml-2"/>
                 </ChildContent>
                 <TooltipContent>
-                    <MudText>Useful when you have global 'allow' rules and want to work after IP blocking rules</MudText>
+                    <MudText Class="mb-2"><strong>Min Priority:</strong> If set, the system will fill gaps between Min and Max Priority before adding new entries at the end.</MudText>
+                    <MudText Class="mb-2"><strong>Max Priority:</strong> If set, blocks the rule from exceeding this priority. Useful when you have global 'allow' rules.</MudText>
                     <MudText Class="mt-2">
-                        For example, if you have a global 'allow' rule for country X with priority 100, and you set this rule's Max Priority to 100,
+                        <strong>Example:</strong> If you have a global 'allow' rule for country X with priority 100, set Min Priority to 10 and Max Priority to 100.
                     </MudText>
-                    <MudText>new blocking rules will be added before the 100 priority 'allow' rule, ensuring they are evaluated first.</MudText>
-                    <MudText>If you reach the Max Priority limit, this rule will be automatically disabled.</MudText>
+                    <MudText>New blocking rules will be added in range 10-99, ensuring they are evaluated before the 'allow' rule at 100.</MudText>
+                    <MudText Class="mt-2"><em>Leave both empty to append new rules at the end (no gap filling).</em></MudText>
                 </TooltipContent>
             </MudTooltip>
 

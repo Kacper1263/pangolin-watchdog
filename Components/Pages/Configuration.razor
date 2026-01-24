@@ -286,6 +286,7 @@
             TargetResourceId = rule.TargetResourceId,
             BanDurationMinutes = rule.BanDurationMinutes,
             IsActive = rule.IsActive,
+            MinPriority = rule.MinPriority,
             MaxPriority = rule.MaxPriority,
         };
 
@@ -335,6 +336,7 @@
                     entity.TargetResourceId = savedRule.TargetResourceId;
                     entity.BanDurationMinutes = savedRule.BanDurationMinutes;
                     entity.IsActive = savedRule.IsActive;
+                    entity.MinPriority = savedRule.MinPriority;
                     entity.MaxPriority = savedRule.MaxPriority;
 
                     Db.RuleResourceExclusions.RemoveRange(entity.ExcludedResources);

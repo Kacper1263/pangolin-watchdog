@@ -69,10 +69,10 @@ public class PangolinConnector
         try 
         {
             // Get existing rules to find the next priority
-            var nextPriority = await GetNextPriorityAsync(config, resourceId, rule.MaxPriority);
+            var nextPriority = await GetNextPriorityAsync(config, resourceId, rule.MinPriority, rule.MaxPriority);
             
             // Check if the nextPriority exceeds maxPriority. If so, we will disable the rule and add a new problem.
-            if(nextPriority >= rule.MaxPriority)
+            if(rule.MaxPriority.HasValue && nextPriority >= rule.MaxPriority.Value)
             {
                 throw new MaxPriorityReachedException(
                     $"Next priority exceeds or equals MaxPriority {rule.MaxPriority.Value} for rule \"{rule.Name}\" (ID: {rule.Id}). " +
@@ -194,21 +194,57 @@ public class PangolinConnector
         }
     }
 
-    private async Task<long> GetNextPriorityAsync(AppConfig config, long resourceId, long? maxRulePriority)
+    private async Task<long> GetNextPriorityAsync(AppConfig config, long resourceId, long? minPriority, long? maxPriority)
     {
         var rules = await GetRulesAsync(config, resourceId);
         
         if (!rules.Any())
         {
-            return 10;
+            return minPriority ?? 10;
         }
         
-        // If maxRulePriority is set, ensure we do not exceed it. We take numbers lower than maxRulePriority.
-        // We ignore everything equal or higher than maxRulePriority. Then we add 1 and if we are equal or higher than maxRulePriority,
-        // we disable the rule.
-        if (maxRulePriority.HasValue)
+        // If minPriority is set, we will fill gaps between minPriority and maxPriority
+        if (minPriority.HasValue)
         {
-            var filteredRules = rules.Where(r => r.Priority < maxRulePriority.Value).ToList();
+            var endRange = maxPriority ?? long.MaxValue;
+            var usedPriorities = rules
+                .Select(r => r.Priority)
+                .Where(p => p >= minPriority.Value && p < endRange)
+                .OrderBy(p => p)
+                .ToList();
+            
+            // Search for first gap in range [minPriority, maxPriority)
+            // To avoid performance issues when maxPriority is not set, we limit the search range
+            var searchLimit = maxPriority.HasValue ? endRange : minPriority.Value + 10000;
+            
+            for (var p = minPriority.Value; p < searchLimit && p < endRange; p++)
+            {
+                if (!usedPriorities.Contains(p))
+                {
+                    return p;
+                }
+            }
+            
+            // No gaps found in search range
+            // If maxPriority is set, return endRange which will trigger MaxPriorityReachedException
+            // If maxPriority is not set, return the next available slot after the last used priority
+            if (maxPriority.HasValue)
+            {
+                return endRange;
+            }
+            else
+            {
+                // Find the max priority in our range and add 1
+                var maxInRange = usedPriorities.Any() ? usedPriorities.Max() : minPriority.Value - 1;
+                return maxInRange + 1;
+            }
+        }
+        
+        // Legacy behavior: if minPriority is not set, we don't fill gaps
+        // We filter by maxPriority if set, then add 1 to max
+        if (maxPriority.HasValue)
+        {
+            var filteredRules = rules.Where(r => r.Priority < maxPriority.Value).ToList();
             if (filteredRules.Count == 0)
             {
                 return 10;
@@ -217,8 +253,8 @@ public class PangolinConnector
             return maxPriorityFiltered + 1;
         }
 
-        var maxPriority = rules.Max(r => r.Priority);
-        return maxPriority + 1;
+        var maxPriorityValue = rules.Max(r => r.Priority);
+        return maxPriorityValue + 1;
     }
 
     public async Task<List<PangolinResourceEntry>> GetResourcesAsync(AppConfig config)

@@ -31,6 +31,13 @@ public class WatchdogRule
     public bool IsActive { get; set; } = true;
     
     /// <summary>
+    /// Minimum priority value for ban rules created by this watchdog rule.
+    /// If set, the system will fill gaps between MinPriority and MaxPriority before adding new entries.
+    /// If null, the system will always append new rules at the end (Max + 1).
+    /// </summary>
+    public long? MinPriority { get; set; }
+    
+    /// <summary>
     /// Used to allow declaring rules with higher priority (e.g., allow country) but still banning IPs by giving them lower (number) priority.
     /// If the next priority is equal or higher than MaxPriority, we will disable this rule.
     /// </summary>

@@ -24,29 +24,9 @@ A monitoring and security application that automatically protects your web resou
 
 1. **Log Monitoring**: The background worker continuously polls the Pangolin API for new access logs
 2. **Rule Evaluation**: Each log entry is evaluated against active watchdog rules
-3. **Automatic Banning**: When a log matches a rule, the IP is automatically banned via Pangolin API. The service adds new block IP rules with **last + 1 priority** (see [Handling global allow rules](#handling-global-allow-rules) below)
+3. **Automatic Banning**: When a log matches a rule, the IP is automatically banned via Pangolin API. The service adds new block IP rules with **last + 1 priority** (see [Priority Management with MinPriority and MaxPriority](#priority-management-with-minpriority-and-maxpriority) below)
 4. **Ban Tracking**: All bans are recorded in the local database with expiration times
 5. **Dashboard Updates**: The web dashboard displays real-time statistics and ban history
-
-## Handling global allow rules
-
-If you use global "allow" rules (for example an Allow Country X rule with a high priority), the default strategy of always creating new block rules at `last + 1` can conflict with those allows. To handle this, watchdog rules support an optional `MaxPriority` setting that limits where new block rules will be created.
-
-How it works
-
-- When `MaxPriority` is not set, the service creates new block rules at `last + 1` as before.
-- When `MaxPriority` is set for a watchdog rule, the service will attempt to fill any available priority gaps up to (but not exceeding) the configured `MaxPriority`. New bans will be created in the smallest available priorities greater than the current highest rule, but not beyond `MaxPriority`.
-
-Example
-
-- You have a global "allow" rule for country X at priority `100`.
-- You set `MaxPriority = 100` on a watchdog rule.
-- If existing resource rules end at priority `90`, new bans created by the watchdog will be added at `91`, `92`, ..., `99`.
-- When the next available slot would be `100` (equal to `MaxPriority`), the service will not add the blocking rule and will automatically disable the watchdog rule.
-
-This behavior lets you limit the impact of high-priority blocking rules and retain the precedence of global `allow` rules while still automatically adding bans into available gaps.
-
-Note: `MaxPriority` is evaluated per-resource in Pangolin — it applies independently for each resource. If you use `MaxPriority` on global rules, make sure all resources that the global rule may affect are prepared/configured accordingly or use resource-specific rules instead.
 
 ## Prerequisites
 
@@ -104,9 +84,9 @@ docker run -d \
   -v ./data:/app/data \
   -e ADMIN_PASSWORD=watchdogadmin \
   -e TZ=Europe/Warsaw \
-  kacper1263/pangolin-watchdog:v1.3.0
+  kacper1263/pangolin-watchdog:v1.4.0
 ```
-> change v1.3.0 to current version
+> change v1.4.0 to current version
 
 ## Configuration
 
@@ -145,6 +125,89 @@ Rules define which access patterns should trigger automatic IP bans.
 **‼️ Always backup your `data` folder before updating. First stop docker container and after that backup your folder ‼️**
 
 If you are using docker compose, just bump version number and use `docker compose up -d` (docker will automaticly pull new image and recreate your container)
+
+## Priority Management with MinPriority and MaxPriority
+
+If you use global "allow" rules in Pangolin (e.g., Allow Country X with high priority), the default strategy of always creating new block rules at `last + 1` can conflict with those allow rules. To handle this, watchdog rules support optional `MinPriority` and `MaxPriority` settings that control where new block rules will be created.
+
+### How Priority Management Works
+
+| MinPriority | MaxPriority | Behavior |
+|-------------|-------------|----------|
+| ❌ Not set | ❌ Not set | **Legacy behavior**: Always adds new rules at the end (`Max + 1`). Does not fill gaps. |
+| ❌ Not set | ✅ Set (e.g., `100`) | **Legacy with limit**: Adds at the end until reaching the limit. Rule disabled when limit reached. |
+| ✅ Set (e.g., `10`) | ✅ Set (e.g., `100`) | **Smart gap filling**: Fills gaps in range `[10, 100)` first, then disables rule when no space left. |
+| ✅ Set (e.g., `30000`) | ❌ Not set | **Smart with fallback**: Searches for gaps in range `[30000, 40000)` (MinPriority + 10000), then adds at the end if no gaps found. |
+
+### Detailed Examples
+
+#### Example 1: Using MinPriority and MaxPriority Together (Recommended)
+
+**Scenario:**
+- You have a global "allow" rule for country X at priority `100` in Pangolin
+- You want watchdog to use priorities `10-99` for ban rules
+- Existing Pangolin rules: `[1, 2, ..., 9, 90, 91, ..., 99, 100, 101, 102]`
+
+**Configuration:**
+```
+MinPriority: 10
+MaxPriority: 100
+```
+
+**Result:**
+- ban → Priority `10` (fills gap)
+- ban → Priority `11` (fills gap)
+- ...
+- ban → Priority `81` (fills gap)
+- **Priority 11 gets freed up (expired/deleted)**
+- ban → Priority `11` (fills freed gap)
+- ban → Priority `82` (fills gap)
+- ...
+- When all slots `10-99` are occupied → ❌ Rule disabled, problem notification created
+
+**Why this is useful:**
+- Prevents your watchdog from creating rules beyond priority 100
+- Ensures allow rules at priority ≥100 always take precedence
+- Efficiently fills gaps left by expired/deleted bans
+
+#### Example 2: Using Only MinPriority
+
+**Scenario:**
+- You want watchdog to start at priority `30000`
+- You don't have strict upper limits
+
+**Configuration:**
+```
+MinPriority: 30000
+MaxPriority: (not set)
+```
+
+**Result:**
+- System searches for gaps in range `[30000, 40000)` (performance optimization)
+- If gaps found → fills them
+- If no gaps in search range → adds at `Max + 1` as usual
+- Example: If priorities `[30005, 30006, 30007]` are taken, next ban uses `30000`, then `30001`, etc.
+
+#### Example 3: Legacy Behavior (No Settings)
+
+**Configuration:**
+```
+MinPriority: (not set)
+MaxPriority: (not set)
+```
+
+**Result:**
+- Always adds new rules at `last + 1`
+- Gaps are never filled
+- Example: If you have `[1, 2, 3, 90]`, next ban is `91`, not `4`
+
+### Important Notes
+
+- **Per-Resource Evaluation**: Priority management is evaluated independently for each resource in Pangolin
+- **Gap Detection**: The system only fills gaps when `MinPriority` is set
+- **Performance**: When using `MinPriority` without `MaxPriority`, gap search is limited to a range of 10,000 priorities to prevent performance issues
+- **Automatic Disable**: When `MaxPriority` is set and reached, the rule automatically disables and creates a problem notification
+
 
 ## Technology Stack
 
