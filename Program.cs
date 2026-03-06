@@ -17,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient<PangolinConnector>();
+builder.Services.AddHttpClient<VersionCheckService>();
 builder.Services.AddHostedService<LogWatcherWorker>();
 builder.Services.AddHostedService<BanCleanupWorker>();
 

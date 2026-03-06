@@ -45,4 +45,18 @@ h1:focus {
     min-width: 70px !important;
 }
 
+.version-status-popup {
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    z-index: 1400;
+    max-width: 360px;
+}
+
+.version-status-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
 

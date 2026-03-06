@@ -1,0 +1,83 @@
+@using PangolinWatchdog.Services
+@implements IAsyncDisposable
+@inject VersionCheckService VersionCheckService
+@inject ILogger<VersionStatusPopup> Logger
+
+@if (_status is not null && (_status.IsDevVersion || _status.UpdateAvailable))
+{
+    <div class="version-status-popup">
+        <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Filled" Elevation="6">
+            <div class="version-status-content">
+                <MudText Typo="Typo.caption"><b>Update available</b>: from <b>@GetLeftVersion()</b> to <b>@(_status.LatestVersion ?? "unknown")</b></MudText>
+                <MudButton
+                    Href="https://github.com/Kacper1263/pangolin-watchdog?tab=readme-ov-file#how-to-update"
+                    Target="_blank"
+                    Variant="Variant.Text"
+                    Color="Color.Inherit"
+                    Size="Size.Small"
+                    Class="pa-0">
+                    How to update
+                </MudButton>
+            </div>
+        </MudAlert>
+    </div>
+}
+
+@code {
+    private VersionCheckResult? _status;
+    private CancellationTokenSource? _cts;
+    private PeriodicTimer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cts = new CancellationTokenSource();
+        await RefreshStatusAsync(_cts.Token);
+        _ = RunPeriodicRefreshAsync(_cts.Token);
+    }
+
+    private async Task RunPeriodicRefreshAsync(CancellationToken cancellationToken)
+    {
+        _refreshTimer = new PeriodicTimer(TimeSpan.FromMinutes(60));
+
+        try
+        {
+            while (await _refreshTimer.WaitForNextTickAsync(cancellationToken))
+            {
+                await RefreshStatusAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Component disposed.
+        }
+    }
+
+    private async Task RefreshStatusAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            _status = await VersionCheckService.GetVersionStatusAsync(cancellationToken);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Version status refresh failed.");
+        }
+    }
+
+    private string GetLeftVersion() => _status?.IsDevVersion == true ? "dev" : _status?.CurrentVersion ?? "unknown";
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_cts is not null)
+        {
+            await _cts.CancelAsync();
+            _cts.Dispose();
+        }
+
+        if (_refreshTimer is not null)
+        {
+            _refreshTimer.Dispose();
+        }
+    }
+}
