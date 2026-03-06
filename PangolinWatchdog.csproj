@@ -21,6 +21,7 @@
     <Content Update="wwwroot\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include=".github\workflows\docker-publish.yml" />
   </ItemGroup>
 
 </Project>
