@@ -19,4 +19,5 @@ public class AppConfig
     public int DefaultBanDurationMinutes { get; set; } = 7 * 24 * 60;
     
     public long LastProcessedLogId { get; set; } = 0;
+    public DateTime? LastLogFetchAtUtc { get; set; }
 }

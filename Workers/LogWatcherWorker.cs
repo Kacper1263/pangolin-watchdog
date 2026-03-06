@@ -12,8 +12,6 @@ public class LogWatcherWorker : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<LogWatcherWorker> _logger;
-    
-    bool firstRun = true;
 
     public LogWatcherWorker(IServiceProvider serviceProvider, ILogger<LogWatcherWorker> logger)
     {
@@ -78,12 +76,19 @@ public class LogWatcherWorker : BackgroundService
     private async Task ProcessLogs(AppDbContext db, PangolinConnector pangolin, AppConfig config, CancellationToken token)
     {
         var timeEnd = DateTime.UtcNow;
-        var timeStart = timeEnd.AddMinutes(-2);
-
-        if (firstRun)
+        
+        if (!config.LastLogFetchAtUtc.HasValue)
         {
-            firstRun = false;
-            timeStart = timeEnd.AddHours(-24);
+            config.LastLogFetchAtUtc = timeEnd;
+            await db.SaveChangesAsync(token);
+            _logger.LogInformation("Initialized last log fetch timestamp to {TimeEnd:O}.", timeEnd);
+            return;
+        }
+        
+        var timeStart = config.LastLogFetchAtUtc.Value.AddMinutes(-5);
+        if (timeStart > timeEnd)
+        {
+            timeStart = timeEnd.AddMinutes(-5);
         }
 
         var logs = await pangolin.FetchLogsAsync(config, timeStart, timeEnd);
@@ -93,7 +98,12 @@ public class LogWatcherWorker : BackgroundService
             .OrderBy(l => l.Id) 
             .ToList();
 
-        if (!newLogs.Any()) return;
+        if (!newLogs.Any())
+        {
+            config.LastLogFetchAtUtc = timeEnd;
+            await db.SaveChangesAsync(token);
+            return;
+        }
 
         _logger.LogInformation("Fetched {Count} new logs. Analyzing...", newLogs.Count);
 
@@ -145,6 +155,7 @@ public class LogWatcherWorker : BackgroundService
         }
 
         config.LastProcessedLogId = maxProcessedId;
+        config.LastLogFetchAtUtc = timeEnd;
         await db.SaveChangesAsync(token);
     }
 
