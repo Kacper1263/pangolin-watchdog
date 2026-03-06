@@ -36,7 +36,7 @@ public class VersionCheckService
                               && latest > current;
         
         // log results 
-        _logger.LogInformation("Version Check: Current Version = {CurrentVersion}, Latest Version = {LatestVersion}, Is Dev Version = {IsDevVersion}, Update Available = {UpdateAvailable}",
+        _logger.LogDebug("Version Check: Current Version = {CurrentVersion}, Latest Version = {LatestVersion}, Is Dev Version = {IsDevVersion}, Update Available = {UpdateAvailable}",
             currentVersion, latestVersion ?? "unknown", isDevVersion, updateAvailable);
 
         return new VersionCheckResult(currentVersion, latestVersion, isDevVersion, updateAvailable);
