@@ -50,9 +50,10 @@
         }
         <MudNumericField T="int?" Label="Ban Duration (Minutes)" 
                          @bind-Value="Rule.BanDurationMinutes" 
-                         Min="1" 
-                         Class="mt-4"
-                         HelperText="Leave empty to use global default" />
+                          Min="1" 
+                          Immediate="true"
+                          Class="mt-4"
+                         HelperText="@GetBanDurationHelperText()" />
 
         <MudDivider Class="my-4"/>
 
@@ -181,5 +182,25 @@
         {
             return (Icons.Material.Filled.Error, Color.Error, "Invalid Syntax");
         }
+    }
+
+    private string GetBanDurationHelperText()
+    {
+        if (!Rule.BanDurationMinutes.HasValue)
+        {
+            return "Leave empty to use global default";
+        }
+
+        return $"≈ {FormatMinutesHint(Rule.BanDurationMinutes.Value)}";
+    }
+
+    private static string FormatMinutesHint(long minutes)
+    {
+        if (minutes >= 24 * 60)
+        {
+            return $"{minutes / 1440d:0.##} days";
+        }
+
+        return $"{minutes / 60d:0.##} hours";
     }
 }
