@@ -12,7 +12,8 @@ public sealed record VersionCheckResult(
 public class VersionCheckService
 {
     private const string DockerTagsUrl = "https://hub.docker.com/v2/repositories/kacper1263/pangolin-watchdog/tags?page_size=100";
-    private static readonly Regex VersionRegex = new(@"^v?(?<version>\d+(?:\.\d+){1,3})$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex StableVersionRegex = new(@"^v?(?<version>\d+(?:\.\d+){1,3})$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex CurrentVersionRegex = new(@"^v?(?<version>\d+(?:\.\d+){1,3})(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private readonly HttpClient _httpClient;
     private readonly ILogger<VersionCheckService> _logger;
@@ -31,8 +32,8 @@ public class VersionCheckService
 
         var updateAvailable = !isDevVersion
                               && latestVersion is not null
-                              && TryParseVersion(currentVersion, out var current)
-                              && TryParseVersion(latestVersion, out var latest)
+                              && TryParseCurrentVersion(currentVersion, out var current)
+                              && TryParseStableVersion(latestVersion, out var latest)
                               && latest > current;
         
         // log results 
@@ -69,7 +70,7 @@ public class VersionCheckService
                 }
 
                 var tagName = nameElement.GetString();
-                if (string.IsNullOrWhiteSpace(tagName) || !TryParseVersion(tagName, out var version))
+                if (string.IsNullOrWhiteSpace(tagName) || !TryParseStableVersion(tagName, out var version))
                 {
                     continue;
                 }
@@ -90,16 +91,36 @@ public class VersionCheckService
         }
     }
 
-    private static bool TryParseVersion(string input, out Version version)
+    private static bool TryParseStableVersion(string input, out Version version)
     {
         version = new Version();
 
-        if (!VersionRegex.IsMatch(input))
+        if (!StableVersionRegex.IsMatch(input))
         {
             return false;
         }
 
         var normalized = input.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? input[1..] : input;
+        if (!Version.TryParse(normalized, out var parsed) || parsed is null)
+        {
+            return false;
+        }
+
+        version = parsed;
+        return true;
+    }
+
+    private static bool TryParseCurrentVersion(string input, out Version version)
+    {
+        version = new Version();
+
+        var match = CurrentVersionRegex.Match(input);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var normalized = match.Groups["version"].Value;
         if (!Version.TryParse(normalized, out var parsed) || parsed is null)
         {
             return false;
