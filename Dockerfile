@@ -34,4 +34,7 @@ FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
 ENTRYPOINT ["dotnet", "PangolinWatchdog.dll"]
