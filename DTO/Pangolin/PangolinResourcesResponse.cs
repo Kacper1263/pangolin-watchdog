@@ -27,4 +27,7 @@ public class PangolinResourceEntry
     
     [JsonPropertyName("fullDomain")]
     public string FullDomain { get; set; } = string.Empty;
+    
+    [JsonPropertyName("http")]
+    public bool Http { get; set; } = false;
 }

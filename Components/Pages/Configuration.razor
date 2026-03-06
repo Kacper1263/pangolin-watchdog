@@ -245,6 +245,9 @@
         {
             var resources = await PangolinConnector.GetResourcesAsync(_config);
             
+            // filter only http resources (removes TCP/UDP resources which are not relevant for the watchdog)
+            resources = resources.Where(r => r.Http && !string.IsNullOrWhiteSpace(r.FullDomain)).ToList();
+            
             var existingPangolinIds = Db.Resources.Select(r => r.PangolinResourceId).ToList();
             var fetchedPangolinIds = resources.Select(r => r.ResourceId).ToList();
             
