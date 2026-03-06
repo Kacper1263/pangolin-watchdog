@@ -15,7 +15,12 @@
 
 <MudText Typo="Typo.h4" Class="mb-4">System Configuration</MudText>
 
-<MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+<MudTabs Elevation="2"
+         Rounded="true"
+         ApplyEffectsToContainer="true"
+         PanelClass="pa-6"
+         ActivePanelIndex="@_activeTabIndex"
+         ActivePanelIndexChanged="OnActivePanelIndexChanged">
     
     <MudTabPanel Text="General Settings" Icon="@Icons.Material.Filled.Settings">
         <MudGrid>
@@ -43,8 +48,16 @@
                     <MudCardContent>
                         <MudText Typo="Typo.h6">Watchdog Timers</MudText>
                         <MudNumericField @bind-Value="_config.LogPollingIntervalSeconds" Label="Log Polling Interval (Seconds)" Min="10" />
-                        <MudNumericField @bind-Value="_config.BanCleanupIntervalMinutes" Label="Ban Cleanup Interval (Minutes)" Min="5" />
-                        <MudNumericField @bind-Value="_config.DefaultBanDurationMinutes" Label="Default Ban Duration (Minutes)" Min="1" />
+                        <MudNumericField @bind-Value="_config.BanCleanupIntervalMinutes"
+                                         Label="Ban Cleanup Interval (Minutes)"
+                                         Min="5"
+                                         Immediate="true"
+                                         HelperText="@($"≈ {FormatMinutesHint(_config.BanCleanupIntervalMinutes)}")" />
+                        <MudNumericField @bind-Value="_config.DefaultBanDurationMinutes"
+                                         Label="Default Ban Duration (Minutes)"
+                                         Min="1"
+                                         Immediate="true"
+                                         HelperText="@($"≈ {FormatMinutesHint(_config.DefaultBanDurationMinutes)}")" />
                     </MudCardContent>
                 </MudCard>
             </MudItem>
@@ -142,6 +155,7 @@
     private List<PangolinOrgEntry> _organizations = new();
     private bool _loadingOrgs = false;
     private PangolinOrgEntry? _selectedOrg = null;
+    private int _activeTabIndex = 0;
 
     protected override void OnInitialized()
     {
@@ -167,6 +181,17 @@
     {
         Db.SaveChanges();
         Snackbar.Add("Settings saved successfully!", Severity.Success);
+    }
+
+    private async Task OnActivePanelIndexChanged(int index)
+    {
+        _activeTabIndex = index;
+
+        if (index == 0)
+        {
+            await Db.Entry(_config).ReloadAsync();
+            _selectedOrg = null;
+        }
     }
 
     private void OnOrgSelected(PangolinOrgEntry? org)
@@ -425,5 +450,15 @@
                 .ToList();
             Snackbar.Add("Rule deleted.", Severity.Info);
         }
+    }
+
+    private static string FormatMinutesHint(long minutes)
+    {
+        if (minutes >= 24 * 60)
+        {
+            return $"{minutes / 1440d:0.##} days";
+        }
+
+        return $"{minutes / 60d:0.##} hours";
     }
 }
