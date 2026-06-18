@@ -1,4 +1,4 @@
-﻿@page "/configuration"
+@page "/configuration"
 @using Microsoft.AspNetCore.Authorization
 @using PangolinWatchdog.Data
 @using Microsoft.EntityFrameworkCore
@@ -255,7 +255,29 @@
             if (toDelete.Any())
             {
                 var resourcesToDelete = Db.Resources.Where(r => toDelete.Contains(r.PangolinResourceId)).ToList();
-                Db.Resources.RemoveRange(resourcesToDelete);
+                foreach (var r in resourcesToDelete)
+                {
+                    var isUsed = Db.Rules.Any(rule => rule.TargetResourceId == r.Id) || 
+                                  Db.RuleResourceExclusions.Any(e => e.ResourceId == r.Id) || 
+                                  Db.BannedIps.Any(b => b.ResourceId == r.Id);
+                    
+                    if (isUsed)
+                    {
+                        if (!r.Name.EndsWith("(deleted)"))
+                        {
+                            r.Name = r.Name + " (deleted)";
+                            Db.Problems.Add(new Problem 
+                            { 
+                                Description = $"Resource '{r.Name}' (ID: {r.PangolinResourceId}) disappeared from Pangolin API but is still used in configuration or has active bans. It has been marked as deleted.", 
+                                DetectedAt = DateTime.Now 
+                            });
+                        }
+                    }
+                    else
+                    {
+                        Db.Resources.Remove(r);
+                    }
+                }
             }
             
             foreach (var resource in resources)
