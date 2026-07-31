@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using PangolinWatchdog.Data;
 using PangolinWatchdog.DTO.Pangolin;
 using PangolinWatchdog.Helpers.Exceptions;
@@ -260,15 +260,15 @@ public class PangolinConnector
     public async Task<List<PangolinResourceEntry>> GetResourcesAsync(AppConfig config)
     {
         var allResources = new List<PangolinResourceEntry>();
-        var limit = 1000;
-        var offset = 0;
+        var pageSize = 1000;
+        var page = 1;
         var morePagesAvailable = true;
 
         try
         {
             while (morePagesAvailable)
             {
-                var url = $"{config.PangolinApiUrl.TrimEnd('/')}/org/{config.PangolinOrgId}/resources?limit={limit}&offset={offset}";
+                var url = $"{config.PangolinApiUrl.TrimEnd('/')}/org/{config.PangolinOrgId}/resources?pageSize={pageSize}&page={page}";
                 
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 AddAuthHeader(request, config);
@@ -284,13 +284,13 @@ public class PangolinConnector
                     allResources.AddRange(batch);
                 }
 
-                if (batch.Count < limit)
+                if (batch.Count < pageSize)
                 {
                     morePagesAvailable = false;
                 }
                 else
                 {
-                    offset += limit;
+                    page++;
                 }
             }
 
@@ -298,7 +298,7 @@ public class PangolinConnector
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch resources from Pangolin API (Offset: {Offset})", offset);
+            _logger.LogError(ex, "Failed to fetch resources from Pangolin API (Page: {Page})", page);
             throw;
         }
     }
