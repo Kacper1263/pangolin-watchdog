@@ -2,6 +2,7 @@ using System.Diagnostics;
 using PangolinWatchdog.Data;
 using PangolinWatchdog.DTO.Pangolin;
 using PangolinWatchdog.Helpers.Exceptions;
+using PangolinWatchdog.Helpers;
 
 namespace PangolinWatchdog.Services.Pangolin;
 
@@ -33,8 +34,7 @@ public class PangolinConnector
                 var request = new HttpRequestMessage(HttpMethod.Get, baseUrl + query);
                 AddAuthHeader(request, config);
 
-                var response = await _http.SendAsync(request);
-                response.EnsureSuccessStatusCode();
+                var response = await SendAndValidateAsync(request, "fetch logs");
 
                 var result = await response.Content.ReadFromJsonAsync<PangolinLogResponse>();
                 var batch = result?.Data?.Logs ?? new List<PangolinLogEntry>();
@@ -88,6 +88,12 @@ public class PangolinConnector
                 Enabled = true
             };
 
+            if (ReadOnlyMode.IsEnabled(config))
+            {
+                _logger.LogWarning("READ ONLY mode: simulated ban of IP {Ip} on Resource {ResId}; no change was sent to Pangolin.", ip, resourceId);
+                return;
+            }
+
             // Send PUT request
             var url = $"{config.PangolinApiUrl.TrimEnd('/')}/resource/{resourceId}/rule";
             
@@ -136,8 +142,7 @@ public class PangolinConnector
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 AddAuthHeader(request, config);
 
-                var response = await _http.SendAsync(request);
-                response.EnsureSuccessStatusCode();
+                var response = await SendAndValidateAsync(request, "fetch rules");
 
                 var result = await response.Content.ReadFromJsonAsync<PangolinRulesResponse>();
                 var batch = result?.Data?.Rules ?? new List<PangolinExistingRule>();
@@ -170,6 +175,12 @@ public class PangolinConnector
     {
         try
         {
+            if (ReadOnlyMode.IsEnabled(config))
+            {
+                _logger.LogWarning("READ ONLY mode: simulated deletion of rule {RuleId} from Resource {ResId}; no change was sent to Pangolin.", ruleId, resourceId);
+                return true;
+            }
+
             var url = $"{config.PangolinApiUrl.TrimEnd('/')}/resource/{resourceId}/rule/{ruleId}";
             
             var request = new HttpRequestMessage(HttpMethod.Delete, url);
@@ -273,8 +284,7 @@ public class PangolinConnector
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 AddAuthHeader(request, config);
 
-                var response = await _http.SendAsync(request);
-                response.EnsureSuccessStatusCode();
+                var response = await SendAndValidateAsync(request, "fetch resources");
 
                 var result = await response.Content.ReadFromJsonAsync<PangolinResourcesResponse>();
                 var batch = result?.Data?.Resources ?? new List<PangolinResourceEntry>();
@@ -319,8 +329,7 @@ public class PangolinConnector
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 AddAuthHeader(request, config);
 
-                var response = await _http.SendAsync(request);
-                response.EnsureSuccessStatusCode();
+                var response = await SendAndValidateAsync(request, "fetch organizations");
 
                 var result = await response.Content.ReadFromJsonAsync<PangolinOrgsResponse>();
                 var batch = result?.Data?.Orgs ?? new List<PangolinOrgEntry>();
@@ -355,5 +364,23 @@ public class PangolinConnector
         {
             request.Headers.Add("Authorization", $"Bearer {config.PangolinApiToken}");
         }
+    }
+
+    private async Task<HttpResponseMessage> SendAndValidateAsync(HttpRequestMessage request, string operation)
+    {
+        var response = await _http.SendAsync(request);
+        if (response.IsSuccessStatusCode)
+        {
+            return response;
+        }
+
+        var responseBody = await response.Content.ReadAsStringAsync();
+        _logger.LogError(
+            "Pangolin API communication error while trying to {Operation}. Status: {Status}. Full response body: {Body}",
+            operation,
+            response.StatusCode,
+            responseBody);
+        response.Dispose();
+        throw new HttpRequestException($"Pangolin API returned {(int)response.StatusCode} ({response.StatusCode}).");
     }
 }

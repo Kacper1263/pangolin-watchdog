@@ -40,6 +40,12 @@
                                          Variant="Variant.Text"
                                          HelperText="Type or click to load organizations" />
                         <MudTextField @bind-Value="_config.PangolinApiToken" Label="API Token" InputType="InputType.Password" Variant="Variant.Text" />
+                        <MudSwitch @bind-Value="_config.ReadOnlyMode" Color="Color.Warning" Class="mt-3">
+                            Read only mode (do not modify Pangolin)
+                        </MudSwitch>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            Reads remain enabled, but bans and rule deletions are simulated locally.
+                        </MudText>
                     </MudCardContent>
                 </MudCard>
             </MudItem>

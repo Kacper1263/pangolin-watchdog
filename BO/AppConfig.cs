@@ -11,6 +11,7 @@ public class AppConfig
     public string PangolinApiUrl { get; set; } = "https://api.pangolin.example.com/v1";
     public string PangolinOrgId { get; set; } = string.Empty;
     public string PangolinApiToken { get; set; } = string.Empty;
+    public bool ReadOnlyMode { get; set; } = false;
 
     // Watchdog Cycle Settings
     public int LogPollingIntervalSeconds { get; set; } = 60;

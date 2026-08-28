@@ -1,5 +1,9 @@
 ﻿@inherits LayoutComponentBase
-
+@using System.Diagnostics
+@using Microsoft.EntityFrameworkCore
+@using PangolinWatchdog.Helpers
+@using PangolinWatchdog.Data
+@inject IDbContextFactory<AppDbContext> DbFactory
 
 <MudThemeProvider IsDarkMode="true" />
 <MudDialogProvider @rendermode="InteractiveServer" />
@@ -14,6 +18,7 @@
             <Authorized>
                 <MudButton Href="/" Variant="Variant.Text" Color="Color.Inherit" Class="mx-2">Dashboard</MudButton>
                 <MudButton Href="/configuration" Variant="Variant.Text" Color="Color.Inherit" Class="mx-2">Configuration</MudButton>
+                <MudButton Href="/logs" Variant="Variant.Text" Color="Color.Inherit" Class="mx-2">Logs</MudButton>
                 <MudSpacer/>
                 <ProblemsNotifier />
                 <MudButton Href="/api/logout" Variant="Variant.Outlined" Color="Color.Inherit">Logout</MudButton>
@@ -21,6 +26,10 @@
         </AuthorizeView>
     </MudAppBar>
     <MudMainContent>
+        @if (_readOnlyMode)
+        {
+            <div class="read-only-banner">READ ONLY MODE — Pangolin writes are disabled</div>
+        }
         <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
             @Body
         </MudContainer>
@@ -28,3 +37,14 @@
 </MudLayout>
 
 <VersionStatusPopup />
+
+@code {
+    private bool _readOnlyMode = Debugger.IsAttached;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var config = await db.Configurations.FirstOrDefaultAsync();
+        _readOnlyMode = config != null && ReadOnlyMode.IsEnabled(config);
+    }
+}

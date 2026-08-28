@@ -60,3 +60,67 @@ h1:focus {
     gap: 4px;
 }
 
+.application-log-viewer {
+    height: min(68vh, 760px);
+    overflow: auto;
+    background: #171717;
+    color: #e5e5e5;
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.application-log-entry {
+    --log-time-column: 160px;
+    padding: 2px 8px;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+    line-height: 1.35;
+}
+
+.application-log-header {
+    display: grid;
+    grid-template-columns: 160px 72px minmax(0, 1fr);
+    align-items: start;
+    min-height: 1.35em;
+    line-height: 1.35;
+}
+
+.application-log-time, .application-log-level, .application-log-category, .application-log-message { min-width: 0; }
+.application-log-time { color: #929292; }
+.application-log-level { font-weight: 700; }
+.application-log-category { color: #8ab4f8; margin-right: 8px; overflow-wrap: anywhere; }
+.application-log-message { display: block; color: #e5e5e5; padding-left: var(--log-time-column); margin: 0; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; }
+.log-level-warning .application-log-level { color: #f6c344; }
+.log-level-error .application-log-level, .log-level-critical .application-log-level { color: #ff6b6b; }
+.log-level-information .application-log-level { color: #64d8cb; }
+.log-level-debug .application-log-level, .log-level-trace .application-log-level { color: #a9a9a9; }
+
+.read-only-banner {
+    margin: 0 0 16px;
+    padding: 5px 12px;
+    background: #8d5b00;
+    color: #fff;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-align: center;
+}
+
+/* MudTable inserts a loading row during ServerData refresh. Hide it without
+   disabling the refresh itself or changing the table's layout. */
+.mud-table-loading,
+.mud-table-loading-progress {
+    display: none !important;
+}
+
+@media (max-width: 900px) {
+    .application-log-header {
+        grid-template-columns: 142px 68px minmax(0, 1fr);
+    }
+    .application-log-entry {
+        --log-time-column: 142px;
+    }
+}
+

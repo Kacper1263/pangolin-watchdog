@@ -14,5 +14,28 @@
 <Routes />
 <script src="_framework/blazor.web.js"></script>
 <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+<script>
+    window.pangolinLogs = {
+        isAtBottom: function (element) {
+            if (!element) return true;
+            return element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+        },
+        scrollToBottom: function (element) {
+            if (element) element.scrollTop = element.scrollHeight;
+        },
+        copy: async function (text) {
+            await navigator.clipboard.writeText(text);
+        },
+        download: function (fileName, text) {
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+    };
+</script>
 </body>
 </html>

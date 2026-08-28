@@ -1,0 +1,141 @@
+@page "/logs"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Logging
+@using PangolinWatchdog.Helpers
+@attribute [Authorize]
+@implements IDisposable
+@inject InMemoryLogStore LogStore
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Application Logs</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4">Application Logs</MudText>
+    <MudChip T="string" Color="Color.Info" Size="Size.Small">Last 24 hours · current session</MudChip>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyLogs" Disabled="@(!_visibleLogs.Any())">
+        Copy
+    </MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="SaveLogs" Disabled="@(!_visibleLogs.Any())">
+        Save
+    </MudButton>
+    <MudButton Variant="Variant.Text" Color="Color.Warning" StartIcon="@Icons.Material.Filled.DeleteSweep" OnClick="ClearLogs" Disabled="@(!_allLogs.Any())">
+        Clear
+    </MudButton>
+</MudStack>
+
+<MudTextField @bind-Value="_search" Immediate="true" @bind-Value:after="OnSearchChanged" Placeholder="Search logs..." Adornment="Adornment.Start"
+              AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Class="mb-3" />
+
+<MudPaper Elevation="4" Class="pa-2">
+    <div @ref="_logContainer" class="application-log-viewer">
+        @if (!_visibleLogs.Any())
+        {
+            <MudText Color="Color.Secondary" Class="pa-4">No logs match the current search.</MudText>
+        }
+        else
+        {
+            @foreach (var entry in _visibleLogs)
+            {
+                <div class="application-log-entry log-level-@entry.Level.ToString().ToLowerInvariant()">
+                    <div class="application-log-header">
+                        <span class="application-log-time">@entry.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                        <span class="application-log-level">[@FormatLevel(entry.Level)]</span>
+                        <span class="application-log-category">@entry.Category</span>
+                    </div>
+                    <div class="application-log-message">@entry.Message</div>
+                </div>
+            }
+        }
+    </div>
+</MudPaper>
+
+<MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+    @_visibleLogs.Count of @_allLogs.Count entries · refreshes every 2 seconds · maximum 10,000 entries
+</MudText>
+
+@code {
+    private readonly CancellationTokenSource _refreshCancellation = new();
+    private List<ApplicationLogEntry> _allLogs = new();
+    private List<ApplicationLogEntry> _visibleLogs = new();
+    private string _search = string.Empty;
+    private ElementReference _logContainer;
+    private bool _scrollToBottom;
+
+    protected override void OnInitialized()
+    {
+        RefreshVisibleLogs();
+        _ = RefreshLoopAsync(_refreshCancellation.Token);
+    }
+
+    private async Task RefreshLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                try
+                {
+                    var wasAtBottom = await JS.InvokeAsync<bool>("pangolinLogs.isAtBottom", _logContainer);
+                    await InvokeAsync(() =>
+                    {
+                        _scrollToBottom = wasAtBottom;
+                        RefreshVisibleLogs();
+                        StateHasChanged();
+                    });
+                }
+                catch (JSDisconnectedException) { break; }
+                catch (InvalidOperationException) { break; }
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void RefreshVisibleLogs()
+    {
+        _allLogs = LogStore.GetSnapshot().ToList();
+        _visibleLogs = string.IsNullOrWhiteSpace(_search)
+            ? _allLogs
+            : _allLogs.Where(log => $"{log.Timestamp:O} {log.Level} {log.Category} {log.Message}"
+                .Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollToBottom)
+        {
+            _scrollToBottom = false;
+            await JS.InvokeVoidAsync("pangolinLogs.scrollToBottom", _logContainer);
+        }
+    }
+
+    private string ExportText() => string.Join(Environment.NewLine,
+        _visibleLogs.Select(entry => $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss zzz}] [{FormatLevel(entry.Level)}] [{entry.Category}] {entry.Message}"));
+
+    private async Task CopyLogs() => await JS.InvokeVoidAsync("pangolinLogs.copy", ExportText());
+
+    private async Task SaveLogs() => await JS.InvokeVoidAsync("pangolinLogs.download", "pangolin-watchdog-logs.txt", ExportText());
+
+    private void ClearLogs()
+    {
+        LogStore.Clear();
+        RefreshVisibleLogs();
+    }
+
+    private void OnSearchChanged() => RefreshVisibleLogs();
+
+    private static string FormatLevel(LogLevel level) => level switch
+    {
+        LogLevel.Information => "INFO",
+        LogLevel.Warning => "WARN",
+        LogLevel.Error => "ERROR",
+        LogLevel.Critical => "CRIT",
+        LogLevel.Debug => "DEBUG",
+        LogLevel.Trace => "TRACE",
+        _ => level.ToString().ToUpperInvariant()
+    };
+
+    public void Dispose() => _refreshCancellation.Cancel();
+}

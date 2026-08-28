@@ -14,6 +14,8 @@ using PangolinWatchdog.Services.Pangolin;
 using PangolinWatchdog.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
+var inMemoryLogStore = new InMemoryLogStore();
+builder.Services.AddSingleton(inMemoryLogStore);
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient<PangolinConnector>();
@@ -53,6 +55,7 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole(options => options.FormatterName = "minimal")
     .AddConsoleFormatter<MinimalConsoleFormatter, ConsoleFormatterOptions>();
 builder.Logging.AddDebug();
+builder.Logging.AddProvider(new InMemoryLogProvider(inMemoryLogStore));
 
 var app = builder.Build();
 
@@ -60,7 +63,29 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("PangolinWatchdog.DatabaseMigration");
+
+    try
+    {
+        var pendingMigrations = db.Database.GetPendingMigrations().ToList();
+        startupLogger.LogInformation("Database migration check: {Count} pending migration(s).", pendingMigrations.Count);
+
+        if (pendingMigrations.Count > 0)
+        {
+            startupLogger.LogInformation("Pending migrations: {Migrations}", string.Join(", ", pendingMigrations));
+            db.Database.Migrate();
+            startupLogger.LogInformation("Database migrations applied successfully. Applied {Count} migration(s).", pendingMigrations.Count);
+        }
+        else
+        {
+            startupLogger.LogInformation("Database is already up to date. No migrations were applied.");
+        }
+    }
+    catch (Exception ex)
+    {
+        startupLogger.LogCritical(ex, "Database migration failed. Application startup aborted.");
+        throw;
+    }
 }
 
 if (!app.Environment.IsDevelopment())
