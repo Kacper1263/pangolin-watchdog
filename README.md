@@ -2,8 +2,10 @@
 
 A monitoring and security application that automatically protects your web resources by analyzing access logs from Pangolin API and automatically banning suspicious IPs based on configurable rules.
 
-<img width="1916" height="945" alt="dashboard" src="https://github.com/user-attachments/assets/4b122ceb-ff35-4ad6-813d-d47133652fe2" />
-<img width="1914" height="940" alt="config" src="https://github.com/user-attachments/assets/05bc3392-dfb6-42af-9d85-ebef887a2a6a" />
+<img width="1917" height="1058" alt="dashboard" src="https://github.com/user-attachments/assets/582aa160-5298-4985-b600-d2a8ee8ce79e" />
+<img width="1913" height="1067" alt="config" src="https://github.com/user-attachments/assets/0d450308-101e-4c97-b6ad-dca26cbeeba4" />
+<img width="1918" height="1064" alt="logs" src="https://github.com/user-attachments/assets/3c943f43-2930-4efa-96d0-56af13dd52b7" />
+
 
 
 ## Features
@@ -123,7 +125,7 @@ Rules define which access patterns should trigger automatic IP bans.
 
 **‼️ Always backup your `data` folder before updating. First stop docker container and after that backup your folder ‼️**
 
-If you are using docker compose, just bump version number and use `docker compose up -d` (docker will automaticly pull new image and recreate your container)
+If you are using docker compose, just bump version number and use `docker compose pull` + `docker compose up -d` (docker will automaticly pull new image and recreate your container)
 
 ## Priority Management with MinPriority and MaxPriority
 
